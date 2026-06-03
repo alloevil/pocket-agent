@@ -3,9 +3,9 @@
 > 用飞书远程遥控本地电脑上的 AI 编码 Agent —— 走路、通勤、开会间隙，一条消息就能让 Claude Code / opencode / Codex 在你的电脑上干活。
 
 <p align="center">
+  <a href="https://github.com/alloevil/pocket-agent/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/alloevil/pocket-agent/actions/workflows/tests.yml/badge.svg"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-80%20passing-brightgreen">
   <img alt="Agents" src="https://img.shields.io/badge/agents-Claude%20Code%20%7C%20opencode%20%7C%20Codex-orange">
 </p>
 
