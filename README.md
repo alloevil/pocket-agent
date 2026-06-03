@@ -67,18 +67,29 @@
   - opencode — `opencode --version`（需 `opencode auth login` 配好模型）
   - Codex — 另起 `codex remote-control`（默认 `ws://localhost:5123`）
 
-### 1. 克隆与安装（推荐用虚拟环境）
+### 1. 克隆与安装
+
+推荐用 [uv](https://docs.astral.sh/uv/)（现代 Python 包管理器，比 pip 快一两个数量级，自动管理虚拟环境）：
 
 ```bash
 git clone https://github.com/alloevil/pocket-agent.git
 cd pocket-agent
 
-# 创建并激活虚拟环境（避免污染系统 Python）
+# 安装 uv（如未安装）：curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync                  # 自动创建 .venv 并按 uv.lock 安装精确依赖
+```
+
+之后用 `uv run python main.py` 运行，无需手动激活虚拟环境。
+
+<details>
+<summary>不想用 uv？用标准 venv + pip（点击展开）</summary>
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
-pip install -r requirements.txt
+pip install -e .                 # 从 pyproject.toml 安装
 ```
+</details>
 
 ### 2. 创建飞书应用
 
@@ -91,14 +102,15 @@ pip install -r requirements.txt
 ### 3. 配置并运行
 
 ```bash
-python main.py            # 首次运行自动生成 config.json 并引导你填写
+uv run python main.py     # 首次运行自动生成 config.json 并引导你填写
 # 编辑 config.json：填入飞书凭证、选择 agent、设置 workdir
-python main.py            # 再次运行启动
+uv run python main.py     # 再次运行启动
 
 # 或使用交互式向导（含连接测试）
-python main.py setup
+uv run python main.py setup
 ```
 
+> 用标准 venv 时把 `uv run python` 换成激活环境后的 `python` 即可。
 > 首次直接运行不会报错崩溃：缺 `config.json` 会自动从模板生成并提示下一步；
 > 配置缺凭证 / agent 无效 / CLI 未安装时，启动前会给出清晰提示。
 
@@ -147,7 +159,8 @@ python main.py setup
 pocket-agent/
 ├── main.py                       # 入口 / 配置向导
 ├── config.example.json           # 配置模板
-├── requirements.txt
+├── pyproject.toml                # 依赖与项目元数据
+├── uv.lock                       # 锁定的精确依赖（可复现安装）
 ├── pocket_agent/
 │   ├── events.py                 # 归一化事件模型 AgentEvent / AgentSession
 │   ├── config.py                 # 配置加载与校验
@@ -166,7 +179,7 @@ pocket-agent/
 ## 🧪 测试
 
 ```bash
-python tests/run_all.py
+uv run python tests/run_all.py
 ```
 
 包含离线解析测试（喂录制的 NDJSON / SSE / JSON-RPC 样本断言事件序列）和真实
