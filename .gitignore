@@ -1,0 +1,26 @@
+# ── 含密钥 / 本地状态，绝不提交 ──
+config.json
+sessions.json
+*.session.json
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ── 测试 / 覆盖率 ──
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ── 环境 / 编辑器 ──
+.venv/
+venv/
+.env
+.DS_Store
+.idea/
+.vscode/

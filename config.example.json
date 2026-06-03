@@ -1,0 +1,27 @@
+{
+    "agent": "codex",
+    "workdir": ".",
+
+    "codex_ws_url": "ws://127.0.0.1:5123",
+    "codex_auth_token": "",
+
+    "claude_model": "",
+    "claude_extra_args": [],
+
+    "opencode_model": "",
+    "opencode_port": 0,
+
+    "feishu_app_id": "cli_axxxxxxxxxxxx",
+    "feishu_app_secret": "xxxxxxxxxxxxxxxxxxxxxxxx",
+
+    "allowed_users": "",
+    "throttle_seconds": 3.0,
+    "min_delta_chars": 30,
+    "idle_minutes": 0,
+    "persist_path": "",
+    "heartbeat_seconds": 15,
+    "notify_done_seconds": 0,
+    "max_message_length": 4000,
+    "show_thinking": true,
+    "log_level": "info"
+}
