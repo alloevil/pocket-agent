@@ -50,7 +50,7 @@ class FeishuAPI:
     async def _request(self, method: str, path: str, _retries: int = 3, **kwargs) -> dict:
         """带瞬时错误指数退避重试 + token 失效自动刷新重试。
 
-        参考 cc-connect 的两层重试：网络瞬时错误（超时/连接重置）退避重试；
+        两层重试：网络瞬时错误（超时/连接重置）退避重试；
         token 失效码刷新后重试一次；限流等业务码不重试，直接返回交上层处理。
         """
         delay = 0.5

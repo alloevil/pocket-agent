@@ -1,6 +1,6 @@
 """渲染层抽象 — 平台无关的 Renderer 接口
 
-借鉴 cc-connect 的 RichCardSupporter：把"如何把一轮对话状态渲染成平台消息"
+把"如何把一轮对话状态渲染成平台消息"
 抽象成接口，bridge 只依赖这个接口而非具体的飞书实现。将来加 Telegram /
 Slack 时，只需实现一个新的 Renderer 子类，bridge 一行不改。
 

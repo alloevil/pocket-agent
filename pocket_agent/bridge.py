@@ -29,7 +29,7 @@ class Bridge:
         self.feishu = FeishuAPI(config.feishu_app_id, config.feishu_app_secret)
         self.agent_name = config.agent
         self.backend = create_backend(self.agent_name, config)
-        # 依赖抽象 Renderer 接口，不绑死飞书实现（cc-connect RichCardSupporter 同款解耦）
+        # 依赖抽象 Renderer 接口，不绑死飞书实现（与具体平台解耦）
         self.renderer: Renderer = CardRenderer(
             self.agent_name,
             show_thinking=config.show_thinking,
@@ -547,7 +547,7 @@ class Bridge:
             return
         now = time.time()
         if not force:
-            # 时间节流 + 最小增量字符门槛（参考 cc-connect：减少无谓 PATCH）
+            # 时间节流 + 最小增量字符门槛（减少无谓 PATCH）
             if now - session.last_update_time < self.config.throttle_seconds:
                 return
             grown = len(session.body_buffer) + len(session.thinking_buffer) - session.last_sent_len
@@ -575,7 +575,7 @@ class Bridge:
                 "elements": [{"tag": "plain_text", "content": "↓ 内容较长，接下一条"}],
             })
 
-        # 相同内容跳过：飞书对相同内容的 PATCH 会失败/报错（cc-connect 同款处理）
+        # 相同内容跳过：飞书对相同内容的 PATCH 会失败/报错
         import json as _json
         serialized = _json.dumps(card, ensure_ascii=False, sort_keys=True)
         if serialized == session.last_sent_card and not terminal:
@@ -596,7 +596,7 @@ class Bridge:
     def _freeze_card(self, session: AgentSession):
         """定格流式卡片：审批弹出 / 中断时调用，停止后续流式 PATCH，避免错乱。
 
-        参考 cc-connect streaming.go 的 freeze()——审批与流式更新不应同时改同一张卡片。
+        审批与流式更新不应同时改同一张卡片，故定格。
         """
         session.card_degraded = True
 
@@ -657,7 +657,7 @@ class Bridge:
     async def _finish_turn(self, session: AgentSession):
         """一轮结束：定格主卡片；若正文表格过多，溢出部分另发消息。
 
-        借鉴 cc-connect SplitMarkdownByTables——单条飞书消息塞太多表格会渲染异常。
+        单条飞书消息塞太多表格会渲染异常，故按表格边界拆分。
         """
         # 表格过多 → 拆分：主卡片只留前半，其余表格各发一条 markdown 卡片
         parts = self.renderer.split_long(session.body_buffer, max_tables=3)

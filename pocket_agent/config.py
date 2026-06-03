@@ -34,7 +34,7 @@ class Config:
     allowed_users: str = ""
     # 消息更新节流间隔（秒）
     throttle_seconds: float = 3.0
-    # 流式更新最小增量字符：自上次发送以来新增 < 此值则不触发 PATCH（参考 cc-connect）
+    # 流式更新最小增量字符：自上次发送以来新增 < 此值则不触发 PATCH
     min_delta_chars: int = 30
     # 空闲会话自动轮换：超过此分钟数无用户消息则下次开新会话防上下文漂移；0=关闭
     idle_minutes: int = 0

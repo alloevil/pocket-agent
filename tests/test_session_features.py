@@ -1,4 +1,4 @@
-"""借鉴 cc-connect 的三项增强测试：用量累计/usage、表格切分、渲染抽象"""
+"""三项增强测试：用量累计/usage、表格切分、渲染抽象"""
 
 import asyncio
 import sys

@@ -100,7 +100,7 @@ class AgentSession:
     thinking_buffer: str = ""          # 思考累积
     tool_calls: list = field(default_factory=list)  # [{name, input, status}]
     last_update_time: float = 0.0
-    # 流式更新去重 / 降级（参考 cc-connect streaming.go）
+    # 流式更新去重 / 降级
     last_sent_len: int = 0             # 上次 PATCH 时正文长度（最小增量门槛用）
     last_sent_card: str = ""           # 上次成功发送的卡片序列化（相同则跳过）
     card_degraded: bool = False        # PATCH 连续失败 → 停止流式，只发终态

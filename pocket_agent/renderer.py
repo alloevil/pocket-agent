@@ -38,7 +38,7 @@ def _fence_lang(line: str) -> str:
 def split_at_codefence_boundary(text: str, limit: int) -> tuple[str, str]:
     """把 text 切成 (head, tail)，head 不超过 limit，且不切断代码围栏。
 
-    借鉴 cc-connect SplitMessageCodeFenceAware：逐行累积到接近 limit 时切分；
+    逐行累积到接近 limit 时切分；
     若切点落在未闭合的 ``` 围栏内，则在 head 末尾补 ``` 闭合、在 tail 头部用
     同语言重开围栏，保证两段都能正确渲染代码块。
     """
@@ -91,7 +91,7 @@ def split_at_codefence_boundary(text: str, limit: int) -> tuple[str, str]:
 
 
 def split_markdown_by_tables(md_text: str, max_tables: int = 3) -> list[str]:
-    """表格过多时按表格边界把内容切成多条（移植自 cc-connect splitMarkdownByTables）。
+    """表格过多时按表格边界把内容切成多条。
 
     表格 <= max_tables：原样返回单条。否则前 max_tables 个表格连同其前文为第一条，
     其余每个表格各成一条。避免单条飞书消息塞太多表格导致渲染异常。
