@@ -101,14 +101,24 @@ pip install -e .                 # 从 pyproject.toml 安装
 
 ### 3. 配置并运行
 
-```bash
-uv run python main.py     # 首次运行自动生成 config.json 并引导你填写
-# 编辑 config.json：填入飞书凭证、选择 agent、设置 workdir
-uv run python main.py     # 再次运行启动
+**推荐用交互式向导**，全程引导、当场验证凭证、还能扫脸式绑定使用者：
 
-# 或使用交互式向导（含连接测试）
+```bash
 uv run python main.py setup
 ```
+
+向导会：① 分步教你建飞书应用 → ② 填凭证并**立即验证**有效性 → ③ 选 agent →
+④ **绑定使用者**（无需查 open_id，启动后在飞书给机器人发条消息即自动绑定）→ 保存并启动。
+
+<details>
+<summary>或手动编辑 config.json（点击展开）</summary>
+
+```bash
+uv run python main.py     # 首次运行自动生成 config.json 并提示
+# 编辑 config.json：填入飞书凭证、选择 agent、设置 workdir
+uv run python main.py     # 再次运行启动
+```
+</details>
 
 > 用标准 venv 时把 `uv run python` 换成激活环境后的 `python` 即可。
 > 首次直接运行不会报错崩溃：缺 `config.json` 会自动从模板生成并提示下一步；
