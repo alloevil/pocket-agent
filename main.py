@@ -14,6 +14,17 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 
 _AGENTS = ("claude", "opencode", "codex")
 
+# 飞书应用所需配置（向导第①步直接给用户复制；改这里即同步全流程）
+_REQUIRED_SCOPES = [
+    "im:message.p2p_msg:readonly",   # 读私聊消息
+    "im:message:send_as_bot",        # 发消息
+]
+_OPTIONAL_SCOPES = [
+    "application:application:self_manage",  # 自动识别主人，免手动绑定
+]
+_REQUIRED_EVENTS = ["im.message.receive_v1"]   # 接收消息
+_REQUIRED_CALLBACKS = ["card.action.trigger"]   # 卡片按钮回调（审批等）
+
 
 def _open_link(url: str):
     """打印一个（多数终端可点击的）链接"""
@@ -34,20 +45,24 @@ def cmd_setup():
     print("━" * 54)
     print("① 创建飞书应用（约 2 分钟，只需一次）")
     print("━" * 54)
-    print("  在飞书开放平台按下面 6 步操作：")
+    print("  在飞书开放平台按下面几步操作（清单可直接整段复制）：")
     print()
     print("  1) 打开开放平台 → 创建企业自建应用：")
     _open_link("https://open.feishu.cn/app")
     print("  2) 应用能力 → 添加「机器人」")
-    print("  3) 权限管理 → 开通这两个权限：")
-    print("       im:message.p2p_msg:readonly   （读私聊消息）")
-    print("       im:message:send_as_bot        （发消息）")
-    print("     可选（推荐）：")
-    print("       application:application:self_manage （让程序自动认出你这个主人，")
-    print("                                           免去手动发消息绑定）")
+    print()
+    print("  3) 权限管理 → 在「批量开通」处粘贴下面这段（或逐个搜索添加）：")
+    print("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
+    for s in _REQUIRED_SCOPES:
+        print(f"  {s}")
+    print("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
+    print("     可选（推荐，开了就能自动认出你这个主人、免手动绑定）：")
+    for s in _OPTIONAL_SCOPES:
+        print(f"  {s}")
+    print()
     print("  4) 事件与回调 → 订阅方式 → 选「使用长连接接收事件」")
-    print("  5) 事件与回调 → 添加事件 im.message.receive_v1；")
-    print("                 添加回调 card.action.trigger")
+    print(f"  5) 事件与回调 → 添加事件：{'  '.join(_REQUIRED_EVENTS)}")
+    print(f"                 添加回调：{'  '.join(_REQUIRED_CALLBACKS)}")
     print("  6) 版本管理与发布 → 创建版本并发布（企业内可用即可）")
     print()
     print("  完成后在「凭证与基础信息」页可看到 App ID / App Secret。")

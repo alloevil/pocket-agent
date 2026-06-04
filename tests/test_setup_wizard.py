@@ -62,6 +62,15 @@ def test_agents_constant():
     assert set(main._AGENTS) == {"claude", "opencode", "codex"}
 
 
+def test_feishu_config_constants():
+    # 向导第①步给用户复制的清单——核心权限/事件不能漏
+    assert "im:message.p2p_msg:readonly" in main._REQUIRED_SCOPES
+    assert "im:message:send_as_bot" in main._REQUIRED_SCOPES
+    assert "application:application:self_manage" in main._OPTIONAL_SCOPES
+    assert main._REQUIRED_EVENTS == ["im.message.receive_v1"]
+    assert main._REQUIRED_CALLBACKS == ["card.action.trigger"]
+
+
 # ── 自动解析应用所有者（零配置绑定）──
 # 注：_request 会先 post 取 token，再 request 业务接口；共享 mock 对两次返回同一 data，
 # 故测试 payload 同时含 tenant_access_token 与 owner 字段。

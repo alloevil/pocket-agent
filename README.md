@@ -110,7 +110,11 @@ python main.py setup
 > 配置向导会分步引导你完成这一步并附直达链接；这里列出供参考。
 
 1. 在[飞书开放平台](https://open.feishu.cn/)创建企业自建应用，启用机器人能力
-2. 添加权限：`im:message.p2p_msg:readonly`、`im:message:send_as_bot`；
+2. 权限管理 → **批量开通**处粘贴下面两行（或逐个搜索添加）：
+   ```
+   im:message.p2p_msg:readonly
+   im:message:send_as_bot
+   ```
    可选（推荐）`application:application:self_manage` —— 让程序**自动认出你这个主人**，免去手动绑定
 3. 事件与回调 → 订阅方式 → **使用长连接接收事件**
 4. 添加事件 `im.message.receive_v1`，添加回调 `card.action.trigger`
