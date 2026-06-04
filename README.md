@@ -113,9 +113,9 @@ python main.py setup
 2. 权限管理 → **批量导入**，粘贴一段权限 JSON（格式 `{"scopes":{"tenant":[...],"user":[...]}}`）：
    - 运行 `uv run python main.py setup`，向导第 ① 步会打印**可直接复制的完整权限 JSON**（一次开齐 im / docs / sheets / base / wiki / task 等全部能力，为日后扩展预留）
    - 本程序**核心只需** `im:message.p2p_msg:readonly`、`im:message:send_as_bot`；推荐再开 `application:application:self_manage`（自动识别主人、免手动绑定）
-3. 事件与回调 → 订阅方式 → **使用长连接接收事件**
-4. 添加事件 `im.message.receive_v1`，添加回调 `card.action.trigger`
-5. 发布应用，在「凭证与基础信息」拿到 **App ID** 和 **App Secret**
+3. 事件与回调 → 订阅方式 → **使用长连接接收事件**（⚠️ 选成 Webhook 则长连接能连上但收不到消息）
+4. 添加事件 `im.message.receive_v1`，添加回调 `card.action.trigger`（⚠️ **漏加事件 = 发消息完全没反应且不报错**，最常见的坑）
+5. 发布应用（状态需为「已发布」），在「凭证与基础信息」拿到 **App ID** 和 **App Secret**
 
 ### 3. 配置
 

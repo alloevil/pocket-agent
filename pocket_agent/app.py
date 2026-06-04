@@ -108,6 +108,13 @@ def run(config_path: str = "config.json"):
 
     # 启动飞书 WebSocket（阻塞主线程）
     logger.info("Starting Feishu WebSocket...")
+    logger.info(
+        "✅ 就绪：现在去飞书给机器人发条消息试试。"
+        "若发消息后这里【没有任何新日志】，多半是飞书后台漏配："
+        "①订阅方式选「使用长连接接收事件」 "
+        "②已添加事件 im.message.receive_v1 "
+        "③应用版本状态为「已发布」。"
+    )
     event_client.start()
 
 
