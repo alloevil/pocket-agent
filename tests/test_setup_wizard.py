@@ -71,6 +71,23 @@ def test_feishu_config_constants():
     assert main._REQUIRED_CALLBACKS == ["card.action.trigger"]
 
 
+def test_scopes_import_json():
+    import json as _json
+    # 含可选权限：结构符合飞书批量导入格式，应用级权限进 tenant
+    obj = _json.loads(main._scopes_import_json(include_optional=True))
+    assert set(obj.keys()) == {"scopes"}
+    assert set(obj["scopes"].keys()) == {"tenant", "user"}
+    tenant = obj["scopes"]["tenant"]
+    assert "im:message:send_as_bot" in tenant
+    assert "im:message.p2p_msg:readonly" in tenant
+    assert "application:application:self_manage" in tenant
+    assert obj["scopes"]["user"] == []
+    # 不含可选权限：self_manage 应被排除
+    obj2 = _json.loads(main._scopes_import_json(include_optional=False))
+    assert "application:application:self_manage" not in obj2["scopes"]["tenant"]
+    assert "im:message:send_as_bot" in obj2["scopes"]["tenant"]
+
+
 # ── 自动解析应用所有者（零配置绑定）──
 # 注：_request 会先 post 取 token，再 request 业务接口；共享 mock 对两次返回同一 data，
 # 故测试 payload 同时含 tenant_access_token 与 owner 字段。

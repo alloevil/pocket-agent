@@ -26,6 +26,20 @@ _REQUIRED_EVENTS = ["im.message.receive_v1"]   # 接收消息
 _REQUIRED_CALLBACKS = ["card.action.trigger"]   # 卡片按钮回调（审批等）
 
 
+def _scopes_import_json(include_optional: bool = True) -> str:
+    """生成飞书「权限管理 → 批量导入」可直接粘贴的 JSON。
+
+    飞书批量导入格式：{"scopes": {"tenant": [...], "user": [...]}}。
+    我们的权限都是应用级（tenant），user 留空。改 _REQUIRED_SCOPES
+    等常量即同步此处，避免清单漂移。
+    """
+    tenant = list(_REQUIRED_SCOPES)
+    if include_optional:
+        tenant += _OPTIONAL_SCOPES
+    return json.dumps({"scopes": {"tenant": tenant, "user": []}},
+                      indent=2, ensure_ascii=False)
+
+
 def _open_link(url: str):
     """打印一个（多数终端可点击的）链接"""
     print(f"  🔗 {url}")
@@ -51,14 +65,12 @@ def cmd_setup():
     _open_link("https://open.feishu.cn/app")
     print("  2) 应用能力 → 添加「机器人」")
     print()
-    print("  3) 权限管理 → 在「批量开通」处粘贴下面这段（或逐个搜索添加）：")
+    print("  3) 权限管理 → 「批量导入」，把下面整段 JSON 粘进去：")
     print("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-    for s in _REQUIRED_SCOPES:
-        print(f"  {s}")
+    print(_scopes_import_json(include_optional=True))
     print("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-    print("     可选（推荐，开了就能自动认出你这个主人、免手动绑定）：")
-    for s in _OPTIONAL_SCOPES:
-        print(f"  {s}")
+    print("     （含可选权限 self_manage：开了就能自动认出你这个主人、免手动绑定；")
+    print("       不想要可删掉那一行再导入）")
     print()
     print("  4) 事件与回调 → 订阅方式 → 选「使用长连接接收事件」")
     print(f"  5) 事件与回调 → 添加事件：{'  '.join(_REQUIRED_EVENTS)}")
