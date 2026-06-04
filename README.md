@@ -110,20 +110,9 @@ python main.py setup
 > 配置向导会分步引导你完成这一步并附直达链接；这里列出供参考。
 
 1. 在[飞书开放平台](https://open.feishu.cn/)创建企业自建应用，启用机器人能力
-2. 权限管理 → **批量导入**，粘贴下面整段 JSON：
-   ```json
-   {
-     "scopes": {
-       "tenant": [
-         "im:message.p2p_msg:readonly",
-         "im:message:send_as_bot",
-         "application:application:self_manage"
-       ],
-       "user": []
-     }
-   }
-   ```
-   > `application:application:self_manage` 为可选（推荐）—— 让程序**自动认出你这个主人**，免去手动绑定；不想要可删掉该行再导入。
+2. 权限管理 → **批量导入**，粘贴一段权限 JSON（格式 `{"scopes":{"tenant":[...],"user":[...]}}`）：
+   - 运行 `uv run python main.py setup`，向导第 ① 步会打印**可直接复制的完整权限 JSON**（一次开齐 im / docs / sheets / base / wiki / task 等全部能力，为日后扩展预留）
+   - 本程序**核心只需** `im:message.p2p_msg:readonly`、`im:message:send_as_bot`；推荐再开 `application:application:self_manage`（自动识别主人、免手动绑定）
 3. 事件与回调 → 订阅方式 → **使用长连接接收事件**
 4. 添加事件 `im.message.receive_v1`，添加回调 `card.action.trigger`
 5. 发布应用，在「凭证与基础信息」拿到 **App ID** 和 **App Secret**

@@ -63,9 +63,9 @@ def test_agents_constant():
 
 
 def test_feishu_config_constants():
-    # 向导第①步给用户复制的清单——核心权限/事件不能漏
-    assert "im:message.p2p_msg:readonly" in main._REQUIRED_SCOPES
-    assert "im:message:send_as_bot" in main._REQUIRED_SCOPES
+    # 桥接核心实际用到的权限/事件不能漏
+    assert "im:message.p2p_msg:readonly" in main._CORE_SCOPES
+    assert "im:message:send_as_bot" in main._CORE_SCOPES
     assert "application:application:self_manage" in main._OPTIONAL_SCOPES
     assert main._REQUIRED_EVENTS == ["im.message.receive_v1"]
     assert main._REQUIRED_CALLBACKS == ["card.action.trigger"]
@@ -73,19 +73,16 @@ def test_feishu_config_constants():
 
 def test_scopes_import_json():
     import json as _json
-    # 含可选权限：结构符合飞书批量导入格式，应用级权限进 tenant
-    obj = _json.loads(main._scopes_import_json(include_optional=True))
+    obj = _json.loads(main._scopes_import_json())
+    # 结构符合飞书批量导入格式
     assert set(obj.keys()) == {"scopes"}
     assert set(obj["scopes"].keys()) == {"tenant", "user"}
     tenant = obj["scopes"]["tenant"]
-    assert "im:message:send_as_bot" in tenant
-    assert "im:message.p2p_msg:readonly" in tenant
-    assert "application:application:self_manage" in tenant
-    assert obj["scopes"]["user"] == []
-    # 不含可选权限：self_manage 应被排除
-    obj2 = _json.loads(main._scopes_import_json(include_optional=False))
-    assert "application:application:self_manage" not in obj2["scopes"]["tenant"]
-    assert "im:message:send_as_bot" in obj2["scopes"]["tenant"]
+    # 完整集足够大（不是只有那几个核心权限）
+    assert len(tenant) > 50
+    # 防漂移：核心 + 可选权限必须都在 tenant 完整集里
+    for s in main._CORE_SCOPES + main._OPTIONAL_SCOPES:
+        assert s in tenant, f"核心权限 {s} 不在完整导入清单中"
 
 
 # ── 自动解析应用所有者（零配置绑定）──

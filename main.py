@@ -14,8 +14,8 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 
 _AGENTS = ("claude", "opencode", "codex")
 
-# 飞书应用所需配置（向导第①步直接给用户复制；改这里即同步全流程）
-_REQUIRED_SCOPES = [
+# 桥接核心实际用到的权限（运行最小集）——用于自检与「至少要开这些」校验。
+_CORE_SCOPES = [
     "im:message.p2p_msg:readonly",   # 读私聊消息
     "im:message:send_as_bot",        # 发消息
 ]
@@ -25,18 +25,98 @@ _OPTIONAL_SCOPES = [
 _REQUIRED_EVENTS = ["im.message.receive_v1"]   # 接收消息
 _REQUIRED_CALLBACKS = ["card.action.trigger"]   # 卡片按钮回调（审批等）
 
+# 推荐的「完整权限集」——一次批量导入开齐 im / docs / sheets / base /
+# wiki / task / board 等全部能力，省去日后用到新功能再回来加权限。
+# 飞书「权限管理 → 批量导入」格式：{"scopes": {"tenant": [...], "user": [...]}}。
+_FULL_IMPORT_SCOPES = {
+    "tenant": [
+        "application:application:self_manage",
+        "base:app:copy", "base:app:create", "base:app:read", "base:app:update",
+        "base:dashboard:create", "base:dashboard:delete", "base:dashboard:read",
+        "base:dashboard:update",
+        "base:field:create", "base:field:delete", "base:field:read", "base:field:update",
+        "base:form:create", "base:form:delete", "base:form:read", "base:form:update",
+        "base:record:create", "base:record:delete", "base:record:read", "base:record:update",
+        "base:role:create", "base:role:delete", "base:role:read", "base:role:update",
+        "base:table:create", "base:table:delete", "base:table:read", "base:table:update",
+        "base:view:read", "base:view:write_only",
+        "base:workflow:create", "base:workflow:delete", "base:workflow:read",
+        "base:workflow:update",
+        "base:workspace:list",
+        "board:whiteboard:node:create", "board:whiteboard:node:delete",
+        "board:whiteboard:node:read",
+        "cardkit:card:read", "cardkit:card:write",
+        "contact:contact.base:readonly", "contact:user.base:readonly",
+        "docs:document.comment:create", "docs:document.comment:delete",
+        "docs:document.comment:read", "docs:document.comment:update",
+        "docs:document.comment:write_only",
+        "docs:document.media:download", "docs:document.media:upload",
+        "docs:document:copy", "docs:document:export", "docs:event:subscribe",
+        "docs:permission.member:auth", "docs:permission.member:create",
+        "docs:permission.member:transfer",
+        "docx:document:create", "docx:document:readonly", "docx:document:write_only",
+        "drive:drive.metadata:readonly", "drive:file:download", "drive:file:upload",
+        "im:chat.members:read", "im:chat.members:write_only",
+        "im:chat:create", "im:chat:read", "im:chat:update",
+        "im:message", "im:message.group_at_msg:readonly", "im:message.group_msg",
+        "im:message.p2p_msg:readonly", "im:message.pins:read", "im:message.pins:write_only",
+        "im:message.reactions:read", "im:message.reactions:write_only",
+        "im:message:readonly", "im:message:send_as_bot", "im:resource",
+        "sheets:spreadsheet.meta:read", "sheets:spreadsheet.meta:write_only",
+        "sheets:spreadsheet:create", "sheets:spreadsheet:read", "sheets:spreadsheet:write_only",
+        "task:comment:write", "task:task:read", "task:task:write",
+        "task:tasklist:read", "task:tasklist:write",
+        "wiki:node:copy", "wiki:node:create", "wiki:node:read", "wiki:node:retrieve",
+        "wiki:node:update", "wiki:space:read", "wiki:space:retrieve", "wiki:wiki:readonly",
+    ],
+    "user": [
+        "base:app:copy", "base:app:create", "base:app:read", "base:app:update",
+        "base:dashboard:create", "base:dashboard:delete", "base:dashboard:read",
+        "base:dashboard:update",
+        "base:field:create", "base:field:delete", "base:field:read", "base:field:update",
+        "base:form:create", "base:form:delete", "base:form:read", "base:form:update",
+        "base:record:create", "base:record:delete", "base:record:read", "base:record:update",
+        "base:role:create", "base:role:delete", "base:role:read", "base:role:update",
+        "base:table:create", "base:table:delete", "base:table:read", "base:table:update",
+        "base:view:read", "base:view:write_only",
+        "base:workflow:create", "base:workflow:delete", "base:workflow:read",
+        "base:workflow:update",
+        "base:workspace:list",
+        "board:whiteboard:node:create", "board:whiteboard:node:delete",
+        "board:whiteboard:node:read",
+        "contact:user.base:readonly", "contact:user.basic_profile:readonly",
+        "contact:user:search",
+        "docs:document.comment:create", "docs:document.comment:delete",
+        "docs:document.comment:read", "docs:document.comment:update",
+        "docs:document.comment:write_only",
+        "docs:document.media:download", "docs:document.media:upload",
+        "docs:document:copy", "docs:document:export", "docs:event:subscribe",
+        "docs:permission.member:auth", "docs:permission.member:create",
+        "docs:permission.member:transfer",
+        "docx:document:create", "docx:document:readonly", "docx:document:write_only",
+        "drive:drive.metadata:readonly", "drive:file:download", "drive:file:upload",
+        "im:chat.members:read", "im:chat.members:write_only",
+        "im:chat:read", "im:chat:update",
+        "im:message.group_msg:get_as_user", "im:message.p2p_msg:get_as_user",
+        "im:message.pins:read", "im:message.pins:write_only",
+        "im:message.reactions:read", "im:message.reactions:write_only",
+        "im:message:readonly",
+        "mail:user_mailbox:readonly", "offline_access",
+        "sheets:spreadsheet.meta:read", "sheets:spreadsheet.meta:write_only",
+        "sheets:spreadsheet:create", "sheets:spreadsheet:read", "sheets:spreadsheet:write_only",
+        "task:comment:write", "task:task:read", "task:task:write",
+        "task:tasklist:read", "task:tasklist:write",
+        "vc:meeting.meetingevent:read", "vc:meeting.search:read", "vc:note:read",
+        "wiki:node:copy", "wiki:node:create", "wiki:node:read", "wiki:node:retrieve",
+        "wiki:node:update", "wiki:space:read", "wiki:space:retrieve",
+        "wiki:space:write_only", "wiki:wiki:readonly",
+    ],
+}
 
-def _scopes_import_json(include_optional: bool = True) -> str:
-    """生成飞书「权限管理 → 批量导入」可直接粘贴的 JSON。
 
-    飞书批量导入格式：{"scopes": {"tenant": [...], "user": [...]}}。
-    我们的权限都是应用级（tenant），user 留空。改 _REQUIRED_SCOPES
-    等常量即同步此处，避免清单漂移。
-    """
-    tenant = list(_REQUIRED_SCOPES)
-    if include_optional:
-        tenant += _OPTIONAL_SCOPES
-    return json.dumps({"scopes": {"tenant": tenant, "user": []}},
+def _scopes_import_json() -> str:
+    """生成飞书「权限管理 → 批量导入」可直接粘贴的完整权限 JSON。"""
+    return json.dumps({"scopes": _FULL_IMPORT_SCOPES},
                       indent=2, ensure_ascii=False)
 
 
@@ -65,12 +145,12 @@ def cmd_setup():
     _open_link("https://open.feishu.cn/app")
     print("  2) 应用能力 → 添加「机器人」")
     print()
-    print("  3) 权限管理 → 「批量导入」，把下面整段 JSON 粘进去：")
+    print("  3) 权限管理 → 「批量导入」，把下面整段 JSON 粘进去（一次开齐全部能力）：")
     print("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-    print(_scopes_import_json(include_optional=True))
+    print(_scopes_import_json())
     print("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-    print("     （含可选权限 self_manage：开了就能自动认出你这个主人、免手动绑定；")
-    print("       不想要可删掉那一行再导入）")
+    print("     （含 im / docs / sheets / base / wiki / task 等全部权限；")
+    print("       本程序核心只需 im 那几项，多开的为日后扩展功能预留，可按需删减）")
     print()
     print("  4) 事件与回调 → 订阅方式 → 选「使用长连接接收事件」")
     print(f"  5) 事件与回调 → 添加事件：{'  '.join(_REQUIRED_EVENTS)}")
