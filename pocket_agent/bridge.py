@@ -194,6 +194,8 @@ class Bridge:
             act = value.get("action", "")
             approval_id = value.get("key", "")
             user_id = value.get("uid", "")
+            logger.info("卡片回调 action=%s key=%s uid=%s cid=%s",
+                        act, approval_id, user_id, value.get("cid", ""))
 
             # 重试按钮：用上一条 prompt 在该会话重发
             if act == "retry":
@@ -710,6 +712,8 @@ class Bridge:
     async def _handle_event(self, event: AgentEvent):
         session = self._session_by_native(event.route_id)
         if session is None:
+            logger.warning("事件无法路由（丢弃）kind=%s route_id=%s",
+                           event.kind.name, event.route_id)
             return
 
         kind = event.kind
@@ -989,7 +993,12 @@ class Bridge:
         card = self.renderer.render_approval(
             session, event.approval_id, event.approval_kind,
             event.approval_text, event.approval_detail, tool_input=tool_input)
-        await self.feishu.send_interactive(session.chat_id, card)
+        logger.info("发审批卡片 approval_id=%s chat=%s kind=%s",
+                    event.approval_id, session.chat_id, event.approval_kind)
+        try:
+            await self.feishu.send_interactive(session.chat_id, card)
+        except Exception as e:
+            logger.error("审批卡片发送失败: %s", e, exc_info=True)
 
     async def _send_retry_card(self, session: AgentSession):
         """出错后给一张「重试」卡片，点击用同一 prompt 重发。"""
