@@ -156,6 +156,75 @@ def test_parse_credentials_secret_not_mistaken_as_id():
     assert psec != pid
 
 
+# ── 已有配置的快捷路径（跳过建应用/填凭证）──
+
+def _run_setup_with(inputs, cfg, verify_ok=True):
+    """驱动 cmd_setup：mock 掉文件/验证/绑定，喂入 inputs，返回调用统计。"""
+    import builtins
+    calls = {"step12": 0, "verify": 0, "run": 0}
+
+    def fake_step12(c): calls["step12"] += 1
+    def fake_verify(a, b):
+        calls["verify"] += 1
+        return (verify_ok, "凭证有效，飞书连接成功" if verify_ok else "凭证无效：code=10003")
+    def fake_run(p): calls["run"] += 1
+
+    it = iter(inputs)
+    with mock.patch.object(main, "CONFIG_PATH") as P, \
+         mock.patch.object(main, "_step_app_and_credentials", fake_step12), \
+         mock.patch.object(main, "_verify_feishu", fake_verify), \
+         mock.patch.object(main, "_resolve_owner", lambda a, b: ""), \
+         mock.patch.object(builtins, "input", lambda *a, **k: next(it)), \
+         mock.patch("json.dump"), \
+         mock.patch("json.load", return_value=cfg), \
+         mock.patch("builtins.open", mock.mock_open(read_data="{}")):
+        P.exists.return_value = True
+        # cmd_setup 内部 `from pocket_agent.app import run`
+        with mock.patch("pocket_agent.app.run", fake_run):
+            try:
+                main.cmd_setup()
+            except StopIteration:
+                pass
+    return calls
+
+
+def _has_creds_cfg():
+    return {"feishu_app_id": "cli_existing", "feishu_app_secret": "sec",
+            "agent": "claude", "workdir": "."}
+
+
+def test_setup_existing_creds_quick_start():
+    # 路径1：已配且验证通过 → 直接启动，既不重走①②也不进③
+    calls = _run_setup_with(["1"], _has_creds_cfg())
+    assert calls["verify"] == 1
+    assert calls["step12"] == 0
+    assert calls["run"] == 1, "选1 应直接启动"
+
+
+def test_setup_existing_creds_skip_to_agent():
+    # 路径2：跳过建应用/填凭证，只调 agent 与绑定
+    calls = _run_setup_with(
+        ["2", "claude", ".", "n", "n"], _has_creds_cfg())
+    assert calls["verify"] == 1
+    assert calls["step12"] == 0, "选2 必须跳过①②建应用/填凭证"
+    assert calls["run"] == 0, "末尾选 n 不启动"
+
+
+def test_setup_existing_creds_full_reconfig():
+    # 路径3：重新完整配置 → 仍会走①②
+    calls = _run_setup_with(
+        ["3", "claude", ".", "n", "n"], _has_creds_cfg())
+    assert calls["step12"] == 1, "选3 应重走①②"
+
+
+def test_setup_invalid_existing_creds_forces_reconfig():
+    # 已有凭证但验证失败 → 不给快捷菜单，强制走①②重配
+    calls = _run_setup_with(
+        ["claude", ".", "n", "n"], _has_creds_cfg(), verify_ok=False)
+    assert calls["verify"] == 1
+    assert calls["step12"] == 1, "凭证失效应强制重配①②"
+
+
 if __name__ == "__main__":
     import traceback
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

@@ -163,16 +163,8 @@ def _info(msg: str):  print(f"  {C.blue('ℹ️  ' + msg)}")
 def _hint(msg: str):  print(f"  {C.dim('💡 ' + msg)}")
 
 
-def cmd_setup():
-    """交互式配置向导：建应用引导 → 填凭证(当场验证) → 选 agent → 扫脸绑定 → 保存启动"""
-    print(f"\n{C.title('🤖 Pocket Agent — 配置向导')}\n")
-
-    config = {}
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH) as f:
-            config = json.load(f)
-        print(C.dim(f"  找到已有配置：{CONFIG_PATH}（回车保留原值）\n"))
-
+def _step_app_and_credentials(config: dict):
+    """第①②步：建飞书应用引导 + 填凭证（当场验证）。就地写入 config。"""
     # ── 第 1 步：创建飞书应用（平台要求人工创建，无法跳过，这里讲到最细）──
     _h1("①", "创建飞书应用（约 2 分钟，只需一次）")
     print(f"  在飞书开放平台按下面几步操作（{C.bold('蓝色')}为入口，{C.key('黄色')}为要复制/勾选的重点）：")
@@ -236,6 +228,42 @@ def cmd_setup():
         retry = input("  凭证有误，重新输入？(Y/n): ").strip().lower()
         if retry == 'n':
             break
+
+
+def cmd_setup():
+    """交互式配置向导：(已配则可跳过①②) 选 agent → 绑定 → 保存启动"""
+    print(f"\n{C.title('🤖 Pocket Agent — 配置向导')}\n")
+
+    config = {}
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH) as f:
+            config = json.load(f)
+        print(C.dim(f"  找到已有配置：{CONFIG_PATH}（回车保留原值）\n"))
+
+    # ── 已有凭证：先验证，有效则给「跳过建应用 + 填凭证」的快捷出口 ──
+    skip_creds = False
+    if config.get('feishu_app_id') and config.get('feishu_app_secret'):
+        print(C.dim("  检测到已有飞书凭证，正在验证…"))
+        ok, msg = _verify_feishu(config['feishu_app_id'], config['feishu_app_secret'])
+        if ok:
+            _ok(f"{msg}（App ID：{C.cyan(config['feishu_app_id'])}）")
+            print(f"\n  已配置过飞书，想怎么继续？")
+            print(f"    {C.key('1')}) 直接启动（沿用全部现有配置）")
+            print(f"    {C.key('2')}) 跳过建应用/填凭证，只调整 agent 与绑定")
+            print(f"    {C.key('3')}) 重新完整配置（含建应用指引、重填凭证）")
+            choice = input(f"  选择 [{C.dim('1')}]: ").strip() or "1"
+            if choice == "1":
+                print()
+                from pocket_agent.app import run
+                run(str(CONFIG_PATH))
+                return
+            skip_creds = (choice != "3")
+        else:
+            _warn(f"现有凭证验证失败（{msg}），需重新配置")
+
+    # ── 第①②步：建应用 + 填凭证（已验证有效且用户选跳过时略过）──
+    if not skip_creds:
+        _step_app_and_credentials(config)
 
     # ── 第 3 步：选 agent ──
     print()
