@@ -58,10 +58,21 @@ def run(config_path: str = "config.json"):
     """启动桥接服务"""
     config = prepare_config(config_path)
 
-    logging.basicConfig(
-        level=getattr(logging, config.log_level.upper(), logging.INFO),
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    level = getattr(logging, config.log_level.upper(), logging.INFO)
+    fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    handlers = [logging.StreamHandler()]
+    # 同时落盘，便于事后排查 / 后台运行；路径可用 POCKET_AGENT_LOG 覆盖，空串关闭
+    log_path = os.environ.get(
+        "POCKET_AGENT_LOG",
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "pocket-agent.log"))
+    if log_path:
+        try:
+            handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
+        except OSError as e:
+            print(f"⚠️  无法写日志文件 {log_path}：{e}", file=sys.stderr)
+    logging.basicConfig(level=level, format=fmt, handlers=handlers)
+    if log_path:
+        logger.info("日志同时写入：%s", log_path)
 
     bridge = Bridge(config)
     event_client = FeishuEventClient(config.feishu_app_id, config.feishu_app_secret)

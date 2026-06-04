@@ -3,6 +3,9 @@ config.json
 sessions.json
 *.session.json
 
+# ── 运行日志（可能含会话内容）──
+*.log
+
 # ── Python ──
 __pycache__/
 *.py[cod]
