@@ -241,8 +241,12 @@ class FeishuEventClient:
         """注册卡片回调处理器"""
         self._on_card_action = handler
 
-    async def start(self):
-        """启动 WebSocket 长连接（阻塞）"""
+    def start(self):
+        """启动 WebSocket 长连接（同步阻塞，自带自动重连）。
+
+        注意：内部全是 lark SDK 的同步阻塞调用（cli.start()），没有 await，
+        因此是普通同步方法。app.py 在主线程同步调用它阻塞运行。
+        """
         try:
             import lark_oapi as lark
         except ImportError:
