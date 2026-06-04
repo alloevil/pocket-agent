@@ -88,6 +88,7 @@ class _FakeFeishu:
     async def update_card(self, *a): pass
     async def send_text(self, *a, **k): return {"data": {"message_id": "mt"}}
     async def reply_text(self, *a, **k): return {}
+    async def reply_card(self, *a, **k): return {}
     async def upload_image(self, data): return "imgkey"
     async def upload_file(self, data, name, ft="stream"): return "filekey"
     async def send_image(self, *a, **k): pass

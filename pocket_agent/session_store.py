@@ -105,6 +105,31 @@ class SessionStore:
         if remaining:
             self._active[key] = remaining[-1].session_id
 
+    def rename(self, user_id: str, chat_id: str, session_id: str, title: str) -> bool:
+        """给指定会话改标题；成功返回 True。"""
+        s = self.get(user_id, chat_id, session_id)
+        if not s:
+            return False
+        s.title = title
+        self.save()
+        return True
+
+    def delete(self, user_id: str, chat_id: str, session_id: str) -> bool:
+        """删除指定会话；若删的是活跃会话，活跃指针落到剩余最后一个。成功返回 True。"""
+        key = self._key(user_id, chat_id)
+        group = self._groups.get(key, [])
+        if not any(s.session_id == session_id for s in group):
+            return False
+        self._groups[key] = [s for s in group if s.session_id != session_id]
+        if self._active.get(key) == session_id:
+            remaining = self._groups.get(key, [])
+            if remaining:
+                self._active[key] = remaining[-1].session_id
+            else:
+                self._active.pop(key, None)
+        self.save()
+        return True
+
     def by_native(self, native_id: str) -> Optional[AgentSession]:
         """按后端 native_id 路由回会话（事件回流用）"""
         if not native_id:

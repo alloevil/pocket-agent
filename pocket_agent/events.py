@@ -128,6 +128,9 @@ class AgentSession:
     # 对话历史（持久化用）：[{role, text, tools, cost, time}]
     history: list = field(default_factory=list)
 
+    # /loop 自循环：被 /stop 置位以提前退出循环（运行态，不持久化）
+    loop_cancelled: bool = False
+
     def reset_turn(self):
         """开始新一轮时清空渲染缓冲"""
         self.body_buffer = ""

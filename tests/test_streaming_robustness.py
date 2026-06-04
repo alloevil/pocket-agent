@@ -41,6 +41,9 @@ class FakeFeishu:
     async def reply_text(self, *a, **k):
         return {}
 
+    async def reply_card(self, *a, **k):
+        return {}
+
     async def close(self):
         pass
 

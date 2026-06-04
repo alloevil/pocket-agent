@@ -35,6 +35,10 @@ class FakeFeishu:
     async def reply_text(self, *a, **k):
         return {}
 
+    async def reply_card(self, mid, card):
+        self.cards.append((mid, card))
+        return {}
+
     async def update_message(self, *a, **k):
         return {}
 
@@ -158,9 +162,9 @@ def test_stop_with_no_active_turn():
         b = _bridge_with([])
         replies = []
 
-        async def fake_reply(mid, t):
-            replies.append(t)
-        b.feishu.reply_text = fake_reply
+        async def fake_reply(mid, card):
+            replies.append(str(card))
+        b.feishu.reply_card = fake_reply
         await b._handle_command("u", "c", "m", "/stop")
         assert any("没有正在执行" in r for r in replies)
     asyncio.run(run())
@@ -171,10 +175,10 @@ def test_unknown_command_hints_help():
         b = _bridge_with([])
         replies = []
 
-        async def fake_reply(mid, t):
-            replies.append(t)
-        b.feishu.reply_text = fake_reply
-        await b._handle_command("u", "c", "m", "/foobar")
+        async def fake_reply(mid, card):
+            replies.append(str(card))
+        b.feishu.reply_card = fake_reply
+        await b._handle_command("u", "c", "m", "/zzzqqq")
         assert any("/help" in r for r in replies)
     asyncio.run(run())
 
@@ -194,6 +198,62 @@ def test_message_while_turn_active_rejected_for_subprocess():
         b.store.add(s)
         await b._forward("u", "c", "m", "second message")
         assert any("处理中" in t and "/stop" in t for t in sent)
+    asyncio.run(run())
+
+
+# ── /loop 自循环 ──
+
+def _loop_script(reply_text):
+    """构造一轮 turn 的事件序列：文本增量 + 完成。"""
+    return [
+        AgentEvent(EventKind.SESSION_ID, route_id="fake-1", session_id="fake-1"),
+        AgentEvent(EventKind.TEXT_DELTA, route_id="fake-1", text=reply_text),
+        AgentEvent(EventKind.TURN_DONE, route_id="fake-1"),
+    ]
+
+
+def test_loop_stops_on_done_marker():
+    async def run():
+        # 回复含「已完成」→ 第一轮即停
+        b = _bridge_with(_loop_script("功能写好了，已完成。"))
+        await b._cmd_loop("u", "c", "m", "写个函数")
+        titles = [c[1]["header"]["title"]["content"] for c in b.feishu.cards]
+        assert any("循环完成" in t for t in titles)
+        # 只发了 1 轮任务（首轮），没有继续迭代
+        assert b.store.active("u", "c").total_turns == 1
+    asyncio.run(run())
+
+
+def test_loop_runs_to_max_when_never_done():
+    async def run():
+        # 回复永不含完成标记 → 跑满 2 轮停
+        b = _bridge_with(_loop_script("还在改"))
+        await b._cmd_loop("u", "c", "m", "2 写个函数")  # 上限 2
+        titles = [c[1]["header"]["title"]["content"] for c in b.feishu.cards]
+        assert any("已达上限" in t for t in titles)
+        assert b.store.active("u", "c").total_turns == 2
+    asyncio.run(run())
+
+
+def test_loop_aborts_on_error():
+    async def run():
+        script = [
+            AgentEvent(EventKind.SESSION_ID, route_id="fake-1", session_id="fake-1"),
+            AgentEvent(EventKind.ERROR, route_id="fake-1", error="boom"),
+        ]
+        b = _bridge_with(script)
+        await b._cmd_loop("u", "c", "m", "写个函数")
+        titles = [c[1]["header"]["title"]["content"] for c in b.feishu.cards]
+        assert any("中止" in t for t in titles)
+    asyncio.run(run())
+
+
+def test_loop_requires_task():
+    async def run():
+        b = _bridge_with([])
+        await b._cmd_loop("u", "c", "m", "")
+        titles = [c[1]["header"]["title"]["content"] for c in b.feishu.cards]
+        assert any("用法" in t for t in titles)
     asyncio.run(run())
 
 

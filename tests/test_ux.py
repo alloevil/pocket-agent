@@ -12,6 +12,18 @@ from pocket_agent.bridge import Bridge
 from pocket_agent.events import AgentEvent, AgentSession, EventKind
 
 
+def _card_text(card):
+    """把卡片标题 + 所有 markdown/note 文本拼成一段，便于关键词断言。"""
+    parts = [card.get("header", {}).get("title", {}).get("content", "")]
+    for e in card.get("elements", []):
+        if e.get("tag") == "markdown":
+            parts.append(e.get("content", ""))
+        elif e.get("tag") == "note":
+            for inner in e.get("elements", []):
+                parts.append(inner.get("content", ""))
+    return "\n".join(parts)
+
+
 class _Msg:
     def __init__(self, mtype, content="{}", mentions=None):
         self.message_type = mtype
@@ -51,6 +63,7 @@ class FakeFeishu:
     async def send_text(self, c, t, **k):
         self.texts.append(t); return {"data": {"message_id": "mt"}}
     async def reply_text(self, mid, t): self.replies.append(t)
+    async def reply_card(self, mid, card): self.replies.append(_card_text(card))
     async def close(self): pass
 
 

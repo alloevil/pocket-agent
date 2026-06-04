@@ -15,6 +15,7 @@ from .events import AgentEvent, AgentSession, EventKind
 from .feishu_client import FeishuAPI
 from .backends import create_backend, SUPPORTED_BACKENDS
 from .renderer_base import Renderer
+from .renderer import info_card
 from .renderer import CardRenderer
 from .session_store import SessionStore
 
@@ -42,6 +43,8 @@ class Bridge:
         self._heartbeats: dict = {}    # session_id -> 心跳 asyncio.Task
         self._event_task = None
         self._owner_task = None
+        # /loop：session_id -> turn 完成事件（TURN_DONE/ERROR 时 set）
+        self._turn_done_events: dict = {}
 
     # 所有者刷新间隔（秒）：飞书后台转移应用所有权后 bot 自动跟随
     OWNER_REFRESH_SECONDS = 30 * 60
@@ -240,32 +243,38 @@ class Bridge:
                     pass
             # 新建一个空会话并设为活跃；旧会话保留
             self.store.create(user_id, chat_id)
-            await self.feishu.reply_text(message_id, "✅ 新对话已创建（旧会话可用 /list 查看）")
+            await self.feishu.reply_card(message_id, info_card(
+                "✅ 新对话已创建", "旧会话仍保留，可用 `/list` 查看、`/switch` 切回。",
+                template="green"))
 
         elif command == "/list":
             sessions = self.store.list_sessions(user_id, chat_id)
             if not sessions:
-                await self.feishu.reply_text(message_id, "暂无会话，直接发消息即可开始")
+                await self.feishu.reply_card(message_id, info_card(
+                    "🗂 会话列表", "暂无会话，直接发消息即可开始。", template="blue"))
                 return
             active = self.store.active(user_id, chat_id)
-            lines = ["🗂 本会话列表："]
+            lines = []
             for s in sessions:
-                mark = "▶ " if s is active else "  "
+                mark = "▶" if s is active else "　"
                 title = s.title or "(未命名)"
                 meta = f"{s.total_turns}轮" if s.total_turns else "新建"
-                lines.append(f"{mark}`{s.session_id}` {title} · {meta}")
-            lines.append("\n/switch <id> 切换 · /resume <id> 恢复历史会话")
-            await self.feishu.reply_text(message_id, "\n".join(lines))
+                lines.append(f"{mark} `{s.session_id}`  **{title}**  ·  {meta}")
+            await self.feishu.reply_card(message_id, info_card(
+                "🗂 会话列表", "\n".join(lines), template="blue",
+                footer="/switch <id> 切换  ·  /resume <id> 恢复历史会话"))
 
         elif command == "/switch":
             if not arg:
-                await self.feishu.reply_text(message_id, "用法：/switch <会话id>，如 /switch s2")
+                await self.feishu.reply_card(message_id, info_card(
+                    "❓ 用法", "`/switch <会话id>`，如 `/switch s2`", template="red"))
             elif self.store.switch(user_id, chat_id, arg):
                 s = self.store.active(user_id, chat_id)
-                await self.feishu.reply_text(message_id,
-                    f"✅ 已切换到 `{arg}` {s.title or ''}")
+                await self.feishu.reply_card(message_id, info_card(
+                    "✅ 已切换", f"当前会话：`{arg}`  {s.title or ''}", template="green"))
             else:
-                await self.feishu.reply_text(message_id, f"❓ 没有会话 `{arg}`，用 /list 查看")
+                await self.feishu.reply_card(message_id, info_card(
+                    "❓ 未找到", f"没有会话 `{arg}`，用 `/list` 查看。", template="red"))
 
         elif command == "/resume":
             await self._cmd_resume(user_id, chat_id, message_id, arg)
@@ -274,97 +283,292 @@ class Bridge:
             session = self.store.active(user_id, chat_id)
             if not arg:
                 cur = (session.workdir_override if session else "") or self.config.workdir
-                await self.feishu.reply_text(message_id, f"当前工作目录：`{cur}`\n用法：/cd <路径>")
+                await self.feishu.reply_card(message_id, info_card(
+                    "ℹ️ 工作目录", f"当前：`{cur}`\n\n用法：`/cd <路径>`", template="blue"))
             elif not os.path.isdir(os.path.expanduser(arg)):
-                await self.feishu.reply_text(message_id, f"❌ 目录不存在：`{arg}`")
+                await self.feishu.reply_card(message_id, info_card(
+                    "❌ 目录不存在", f"`{arg}`", template="red"))
             else:
                 if session is None:
                     session = self.store.create(user_id, chat_id)
                 session.workdir_override = os.path.expanduser(arg)
-                await self.feishu.reply_text(message_id, f"✅ 工作目录已设为 `{session.workdir_override}`（下一轮生效）")
+                await self.feishu.reply_card(message_id, info_card(
+                    "✅ 工作目录已更新",
+                    f"`{session.workdir_override}`（下一轮生效）", template="green"))
 
         elif command == "/model":
             session = self.store.active(user_id, chat_id)
             if not arg:
                 cur = (session.model_override if session else "") or "（默认）"
-                await self.feishu.reply_text(message_id, f"当前模型：{cur}\n用法：/model <模型名>")
+                await self.feishu.reply_card(message_id, info_card(
+                    "ℹ️ 模型", f"当前：{cur}\n\n用法：`/model <模型名>`", template="blue"))
             else:
                 if session is None:
                     session = self.store.create(user_id, chat_id)
                 session.model_override = arg
-                await self.feishu.reply_text(message_id, f"✅ 模型已设为 `{arg}`（仅本会话，下一轮生效）")
+                await self.feishu.reply_card(message_id, info_card(
+                    "✅ 模型已更新",
+                    f"`{arg}`（仅本会话，下一轮生效）", template="green"))
 
         elif command == "/stop":
             session = self.store.active(user_id, chat_id)
             if session and session.turn_active:
                 try:
+                    session.loop_cancelled = True   # 若在 /loop 中，令其退出
                     await self.backend.interrupt(session)
                     session.turn_active = False
                     self._stop_heartbeat(session)
                     self._freeze_card(session)
-                    await self.feishu.reply_text(message_id, "⏹ 已中断")
+                    await self.feishu.reply_card(message_id, info_card(
+                        "⏹ 已中断", "当前任务已停止。", template="green"))
                 except Exception as e:
-                    await self.feishu.reply_text(message_id, f"❌ 中断失败: {e}")
+                    await self.feishu.reply_card(message_id, info_card(
+                        "❌ 中断失败", f"`{e}`", template="red"))
             else:
-                await self.feishu.reply_text(message_id, "当前没有正在执行的任务")
+                await self.feishu.reply_card(message_id, info_card(
+                    "ℹ️ 无运行任务", "当前没有正在执行的任务。", template="blue"))
+
+        elif command == "/clear":
+            session = self.store.active(user_id, chat_id)
+            if session is None:
+                await self.feishu.reply_card(message_id, info_card(
+                    "ℹ️ 无会话", "当前没有会话，直接发消息即可开始。", template="blue"))
+            else:
+                await self.backend.new_session(session)
+                await self.feishu.reply_card(message_id, info_card(
+                    "🧹 已清空上下文",
+                    f"会话 `{session.session_id}` 已清空记忆，下一轮从零开始（id 与标题保留）。",
+                    template="green"))
+
+        elif command == "/retry":
+            session = self.store.active(user_id, chat_id)
+            if not session or not session.last_prompt:
+                await self.feishu.reply_card(message_id, info_card(
+                    "ℹ️ 无可重试", "本会话还没有可重发的消息。", template="blue"))
+            elif session.turn_active:
+                await self.feishu.reply_card(message_id, info_card(
+                    "⏳ 任务进行中", "请先 `/stop` 再重试。", template="orange"))
+            else:
+                prompt = session.last_prompt
+                await self.feishu.reply_card(message_id, info_card(
+                    "🔁 重新发送", f"`{prompt[:60]}`", template="blue"))
+                await self._forward(user_id, chat_id, message_id, prompt)
+
+        elif command == "/pwd":
+            session = self.store.active(user_id, chat_id)
+            cur = (session.workdir_override if session else "") or self.config.workdir
+            await self.feishu.reply_card(message_id, info_card(
+                "📂 工作目录", f"`{cur}`", template="blue"))
+
+        elif command == "/status":
+            session = self.store.active(user_id, chat_id)
+            n = len(self.store.list_sessions(user_id, chat_id))
+            if session:
+                wd = session.workdir_override or self.config.workdir
+                running = "运行中 ⏳" if session.turn_active else "空闲"
+                body = (f"**Agent**：{self.agent_name}\n"
+                        f"**工作目录**：`{wd}`\n"
+                        f"**当前会话**：`{session.session_id}` {session.title or '(未命名)'}\n"
+                        f"**状态**：{running}\n"
+                        f"**本聊天会话数**：{n}")
+            else:
+                body = (f"**Agent**：{self.agent_name}\n"
+                        f"**工作目录**：`{self.config.workdir}`\n"
+                        f"**当前会话**：无（发消息即开始）")
+            await self.feishu.reply_card(message_id, info_card(
+                "📋 状态", body, template="blue"))
+
+        elif command == "/rename":
+            if not arg:
+                await self.feishu.reply_card(message_id, info_card(
+                    "❓ 用法", "`/rename <新标题>`（重命名当前会话）", template="red"))
+            else:
+                session = self.store.active(user_id, chat_id)
+                if not session:
+                    await self.feishu.reply_card(message_id, info_card(
+                        "ℹ️ 无会话", "当前没有会话可重命名。", template="blue"))
+                else:
+                    self.store.rename(user_id, chat_id, session.session_id, arg)
+                    await self.feishu.reply_card(message_id, info_card(
+                        "✅ 已重命名", f"`{session.session_id}` → **{arg}**", template="green"))
+
+        elif command == "/delete":
+            if not arg:
+                await self.feishu.reply_card(message_id, info_card(
+                    "❓ 用法", "`/delete <会话id>`，先用 `/list` 查看", template="red"))
+            elif self.store.delete(user_id, chat_id, arg):
+                await self.feishu.reply_card(message_id, info_card(
+                    "🗑 已删除", f"会话 `{arg}` 已删除。", template="green"))
+            else:
+                await self.feishu.reply_card(message_id, info_card(
+                    "❓ 未找到", f"没有会话 `{arg}`，用 `/list` 查看。", template="red"))
+
+        elif command == "/loop":
+            await self._cmd_loop(user_id, chat_id, message_id, arg)
 
         elif command == "/agent":
-            await self.feishu.reply_text(message_id,
-                f"当前 agent：{self.agent_name}\n"
-                f"可选：{', '.join(SUPPORTED_BACKENDS)}\n"
-                f"（切换请修改 config.json 的 agent 字段后重启）")
+            await self.feishu.reply_card(message_id, info_card(
+                "🤖 当前 Agent",
+                f"当前：**{self.agent_name}**\n\n"
+                f"可选：{', '.join(f'`{a}`' for a in SUPPORTED_BACKENDS)}",
+                template="blue",
+                footer="切换：修改 config.json 的 agent 字段后重启"))
 
         elif command == "/usage":
             session = self.store.active(user_id, chat_id)
             if session and session.total_turns > 0:
-                lines = [
-                    f"📊 本会话用量（{self.agent_name}）",
-                    f"轮数：{session.total_turns}",
-                    f"工具调用：{session.total_tool_calls} 次",
-                ]
+                body = (f"**轮数**：{session.total_turns}\n"
+                        f"**工具调用**：{session.total_tool_calls} 次")
                 if session.total_cost_usd > 0:
-                    lines.append(f"累计成本：${session.total_cost_usd:.4f}")
-                await self.feishu.reply_text(message_id, "\n".join(lines))
+                    body += f"\n**累计成本**：${session.total_cost_usd:.4f}"
+                await self.feishu.reply_card(message_id, info_card(
+                    f"📊 本会话用量", body, template="blue",
+                    footer=f"agent: {self.agent_name}"))
             else:
-                await self.feishu.reply_text(message_id, "本会话还没有用量记录")
+                await self.feishu.reply_card(message_id, info_card(
+                    "📊 本会话用量", "本会话还没有用量记录。", template="blue"))
 
         elif command == "/help":
-            await self.feishu.reply_text(message_id,
-                f"🤖 Pocket Agent（当前：{self.agent_name}）\n\n"
-                "直接发消息 → Agent 处理\n"
-                "/new — 新对话\n"
-                "/list — 列出会话\n"
-                "/switch <id> — 切换会话\n"
-                "/resume <id> — 恢复历史会话\n"
-                "/cd <路径> — 切工作目录\n"
-                "/model <名> — 切模型（本会话）\n"
-                "/stop — 中断任务\n"
-                "/usage — 用量统计\n"
-                "/agent — 查看当前 agent\n"
-                "/help — 帮助")
+            await self.feishu.reply_card(message_id, info_card(
+                "🤖 Pocket Agent",
+                "直接发消息 → Agent 处理\n\n"
+                "**会话**\n"
+                "`/new` 新对话　`/list` 列出会话\n"
+                "`/switch <id>` 切换　`/resume <id>` 恢复历史\n"
+                "`/rename <名>` 改标题　`/delete <id>` 删除\n"
+                "`/clear` 清空上下文\n\n"
+                "**设置**\n"
+                "`/cd <路径>` 切目录　`/pwd` 看目录　`/model <名>` 切模型\n\n"
+                "**运行**\n"
+                "`/retry` 重发上条　`/loop <任务>` 反复迭代到完成\n"
+                "`/stop` 中断　`/status` 状态　`/usage` 用量　`/agent` 当前 agent",
+                template="blue",
+                footer=f"当前 agent: {self.agent_name}"))
 
         else:
             # 命令纠错：找最接近的已知命令
             import difflib
             known = ["/new", "/list", "/switch", "/resume", "/cd", "/model",
-                     "/stop", "/usage", "/agent", "/help"]
+                     "/stop", "/usage", "/agent", "/help",
+                     "/clear", "/retry", "/pwd", "/status", "/rename",
+                     "/delete", "/loop"]
             near = difflib.get_close_matches(command, known, n=1, cutoff=0.5)
-            tip = f"，你是说 `{near[0]}` 吗？" if near else "，发送 /help 查看可用命令"
-            await self.feishu.reply_text(message_id, f"❓ 未知命令：{command}{tip}")
+            tip = f"你是说 `{near[0]}` 吗？" if near else "发送 `/help` 查看可用命令。"
+            await self.feishu.reply_card(message_id, info_card(
+                "❓ 未知命令", f"`{command}`\n\n{tip}", template="red"))
 
     async def _cmd_resume(self, user_id, chat_id, message_id, arg):
         """恢复一个历史会话为活跃（后端续接靠 native_id，下一轮自然带上）。"""
         if not arg:
-            await self.feishu.reply_text(message_id, "用法：/resume <会话id>，先用 /list 查看")
+            await self.feishu.reply_card(message_id, info_card(
+                "❓ 用法", "`/resume <会话id>`，先用 `/list` 查看", template="red"))
             return
         s = self.store.get(user_id, chat_id, arg)
         if not s:
-            await self.feishu.reply_text(message_id, f"❓ 没有会话 `{arg}`")
+            await self.feishu.reply_card(message_id, info_card(
+                "❓ 未找到", f"没有会话 `{arg}`", template="red"))
             return
         self.store.switch(user_id, chat_id, arg)
-        tip = "（将续接之前的上下文）" if s.native_id else "（无后端记录，将作为新会话）"
-        await self.feishu.reply_text(message_id,
-            f"✅ 已恢复会话 `{arg}` {s.title or ''}{tip}")
+        tip = "将续接之前的上下文" if s.native_id else "无后端记录，将作为新会话"
+        await self.feishu.reply_card(message_id, info_card(
+            "✅ 已恢复会话", f"`{arg}`  {s.title or ''}\n\n{tip}", template="green"))
+
+    # ── /loop 自循环 ──
+
+    LOOP_MAX_DEFAULT = 5
+    LOOP_MAX_HARD = 15
+    LOOP_DONE_MARKERS = ("已完成", "全部完成", "任务完成", "done", "completed", "完成。")
+    LOOP_CONTINUE_PROMPT = (
+        "请检查上面的工作是否已经完全达成任务目标。"
+        "如果已全部完成，请在回复的开头明确写「已完成」并简述结果；"
+        "如果还没有，请继续改进，不要重复已做的部分。")
+
+    def _signal_turn_done(self, session, errored: bool):
+        """turn 结束（TURN_DONE/ERROR）时记录结果并唤醒等待该 session 的 /loop。"""
+        session._loop_last_errored = errored
+        evt = self._turn_done_events.get(session.session_id)
+        if evt:
+            evt.set()
+
+    async def _wait_turn_done(self, session, timeout: float = 1800.0) -> bool:
+        """等待 session 当前 turn 结束。返回 True=正常结束，False=出错/超时。"""
+        if not session.turn_active:
+            return not getattr(session, "_loop_last_errored", False)
+        evt = asyncio.Event()
+        self._turn_done_events[session.session_id] = evt
+        try:
+            await asyncio.wait_for(evt.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return False
+        finally:
+            self._turn_done_events.pop(session.session_id, None)
+        return not getattr(session, "_loop_last_errored", False)
+
+    async def _cmd_loop(self, user_id, chat_id, message_id, arg):
+        """让 agent 反复迭代直到自评完成（含完成标记）或达到最大轮数。
+
+        用法：/loop <任务>  或  /loop <轮数> <任务>（轮数 1~LOOP_MAX_HARD）。
+        停止条件：agent 回复含完成标记 / 达到上限 / 出错 / 被 /stop 取消。
+        """
+        # 解析可选的轮数前缀
+        max_rounds = self.LOOP_MAX_DEFAULT
+        parts = arg.split(maxsplit=1)
+        if parts and parts[0].isdigit():
+            max_rounds = max(1, min(self.LOOP_MAX_HARD, int(parts[0])))
+            task = parts[1].strip() if len(parts) > 1 else ""
+        else:
+            task = arg.strip()
+        if not task:
+            await self.feishu.reply_card(message_id, info_card(
+                "❓ 用法", "`/loop <任务>` 或 `/loop <轮数> <任务>`，"
+                "让 agent 反复迭代到自评完成。", template="red"))
+            return
+
+        session = self.store.active(user_id, chat_id)
+        if session and session.turn_active:
+            await self.feishu.reply_card(message_id, info_card(
+                "⏳ 任务进行中", "请先 `/stop` 再开始循环。", template="orange"))
+            return
+
+        await self.feishu.reply_card(message_id, info_card(
+            "🔄 开始循环", f"任务：{task}\n\n最多 {max_rounds} 轮，自评完成即停。",
+            template="blue"))
+
+        # 首轮
+        await self._forward(user_id, chat_id, message_id, task)
+        session = self.store.active(user_id, chat_id)
+        if session is None:
+            return
+        session.loop_cancelled = False
+
+        for i in range(1, max_rounds + 1):
+            ok = await self._wait_turn_done(session)
+            if session.loop_cancelled:
+                await self.feishu.send_interactive(chat_id, info_card(
+                    "⏹ 循环已停止", f"在第 {i} 轮被中断。", template="blue"))
+                return
+            if not ok:
+                await self.feishu.send_interactive(chat_id, info_card(
+                    "⚠️ 循环中止", f"第 {i} 轮出错或超时，已停止。", template="red"))
+                return
+            # 读最近一轮回复，判断是否自评完成
+            reply = (session.history[-1]["reply"] if session.history else "") or ""
+            if any(m in reply.lower() for m in
+                   (mk.lower() for mk in self.LOOP_DONE_MARKERS)):
+                await self.feishu.send_interactive(chat_id, info_card(
+                    "✅ 循环完成", f"agent 在第 {i} 轮自评完成。", template="green"))
+                return
+            if i >= max_rounds:
+                break
+            # 继续下一轮
+            await self.feishu.send_interactive(chat_id, info_card(
+                "🔄 继续迭代", f"第 {i + 1}/{max_rounds} 轮…", template="blue"))
+            await self._forward(user_id, chat_id, message_id,
+                                self.LOOP_CONTINUE_PROMPT)
+
+        await self.feishu.send_interactive(chat_id, info_card(
+            "⏹ 已达上限", f"已迭代 {max_rounds} 轮仍未自评完成，停止。"
+            "可 `/retry` 或继续手动指挥。", template="orange"))
 
     # ── 转发 ──
 
@@ -520,6 +724,7 @@ class Bridge:
             await self._finish_turn(session)
             await self._maybe_notify_done(session, elapsed)
             self.store.save()      # 每轮结束落盘，防进程异常退出丢失
+            self._signal_turn_done(session, errored=False)
 
         elif kind == EventKind.ERROR:
             session.turn_active = False
@@ -528,6 +733,7 @@ class Bridge:
             # 出错且有上轮 prompt → 发一张带「重试」按钮的卡片
             if session.last_prompt:
                 await self._send_retry_card(session)
+            self._signal_turn_done(session, errored=True)
 
     @staticmethod
     def _find_tool(session: AgentSession, tool_call_id: str):

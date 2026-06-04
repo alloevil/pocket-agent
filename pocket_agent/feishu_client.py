@@ -106,6 +106,11 @@ class FeishuAPI:
         return await self._request("POST", f"/im/v1/messages/{message_id}/reply",
             json={"msg_type": "text", "content": json.dumps({"text": text})})
 
+    async def reply_card(self, message_id: str, card: dict) -> dict:
+        """以交互卡片回复一条消息（挂在原消息下，与 reply_text 同形态）。"""
+        return await self._request("POST", f"/im/v1/messages/{message_id}/reply",
+            json={"msg_type": "interactive", "content": json.dumps(card)})
+
     async def update_message(self, message_id: str, text: str) -> dict:
         return await self._request("PATCH", f"/im/v1/messages/{message_id}",
             json={"msg_type": "text", "content": json.dumps({"text": text})})

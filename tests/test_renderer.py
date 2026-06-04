@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pocket_agent.events import AgentSession
-from pocket_agent.renderer import CardRenderer
+from pocket_agent.renderer import CardRenderer, info_card
 
 
 def _new_session():
@@ -115,6 +115,34 @@ def test_pagination_marker_on_continuation():
     s.body_buffer = "page 3 content"
     card = r.render(s, done=False)
     assert "(#3)" in card["header"]["title"]["content"]
+
+
+# ── info_card：命令返回用的轻量卡片 ──
+
+def test_info_card_structure():
+    card = info_card("✅ 标题", "正文 **粗体**", template="green")
+    assert card["header"]["template"] == "green"
+    assert card["header"]["title"]["content"] == "✅ 标题"
+    assert card["elements"][0]["tag"] == "markdown"
+    assert card["elements"][0]["content"] == "正文 **粗体**"
+
+
+def test_info_card_default_blue():
+    card = info_card("标题", "正文")
+    assert card["header"]["template"] == "blue"
+
+
+def test_info_card_footer_adds_hr_and_note():
+    card = info_card("T", "body", footer="提示文字")
+    tags = [e["tag"] for e in card["elements"]]
+    assert tags == ["markdown", "hr", "note"]
+    note = card["elements"][-1]
+    assert note["elements"][0]["content"] == "提示文字"
+
+
+def test_info_card_no_footer_single_element():
+    card = info_card("T", "body")
+    assert len(card["elements"]) == 1
 
 
 if __name__ == "__main__":

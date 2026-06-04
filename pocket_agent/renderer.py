@@ -133,6 +133,30 @@ def md(content: str) -> dict:
     return {"tag": "markdown", "content": content}
 
 
+def info_card(title: str, body_md: str, template: str = "blue",
+              footer: Optional[str] = None) -> dict:
+    """轻量信息卡片：彩色标题栏 + Markdown 正文 + 可选 note 页脚。
+
+    给斜杠命令的返回用（区别于流式 turn 卡片 Renderer.render）。
+    template 语义：green=成功 / blue=信息 / red=错误 / orange=审批。
+    """
+    elements: list = [md(body_md)]
+    if footer:
+        elements.append({"tag": "hr"})
+        elements.append({
+            "tag": "note",
+            "elements": [{"tag": "plain_text", "content": footer}],
+        })
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {"tag": "plain_text", "content": title},
+            "template": template,
+        },
+        "elements": elements,
+    }
+
+
 def _tool_summary(tool_input: Optional[dict]) -> str:
     """从工具参数里挑一个有代表性的值做单行摘要"""
     if not tool_input:

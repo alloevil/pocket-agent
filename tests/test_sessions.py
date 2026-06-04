@@ -104,6 +104,10 @@ class _FakeFeishu:
     async def update_card(self, *a): pass
     async def send_text(self, *a, **k): return {"data": {"message_id": "mt"}}
     async def reply_text(self, mid, t): self.replies.append(t)
+    async def reply_card(self, mid, card):
+        parts = [card.get("header", {}).get("title", {}).get("content", "")]
+        parts += [e.get("content", "") for e in card.get("elements", []) if e.get("tag") == "markdown"]
+        self.replies.append("\n".join(parts))
     async def close(self): pass
 
 
@@ -148,7 +152,7 @@ def test_cmd_cd_validates_dir():
         await b._handle_command("u", "c", "m", "/cd /no/such/dir/xyz")
         assert "不存在" in b.feishu.replies[-1]
         await b._handle_command("u", "c", "m", "/cd /tmp")
-        assert "已设为" in b.feishu.replies[-1]
+        assert "已更新" in b.feishu.replies[-1]
         assert b.store.active("u", "c").workdir_override == "/tmp"
     asyncio.run(run())
 
@@ -192,6 +196,84 @@ def test_turn_done_records_history():
         assert s.history and s.history[-1]["prompt"] == "做点事"
         assert s.history[-1]["reply"] == "做完了"
         assert s.total_turns == 1
+    asyncio.run(run())
+
+
+# ── store rename / delete ──
+
+def test_store_rename():
+    from pocket_agent.session_store import SessionStore
+    st = SessionStore()
+    s = st.create("u", "c", title="旧")
+    assert st.rename("u", "c", s.session_id, "新标题")
+    assert st.get("u", "c", s.session_id).title == "新标题"
+    assert not st.rename("u", "c", "nope", "x")
+
+
+def test_store_delete():
+    from pocket_agent.session_store import SessionStore
+    st = SessionStore()
+    s1 = st.create("u", "c")
+    s2 = st.create("u", "c")   # s2 成为 active
+    assert st.active("u", "c").session_id == s2.session_id
+    # 删 active → active 落到剩余的 s1
+    assert st.delete("u", "c", s2.session_id)
+    assert st.active("u", "c").session_id == s1.session_id
+    # 删不存在 → False
+    assert not st.delete("u", "c", "nope")
+    # 删最后一个 → active 为空
+    assert st.delete("u", "c", s1.session_id)
+    assert st.active("u", "c") is None
+
+
+# ── 新命令分支 ──
+
+def test_cmd_clear_resets_native_id():
+    async def run():
+        b = _bridge()
+        await b._forward("u", "c", "m", "hi")
+        s = b.store.active("u", "c")
+        assert s.native_id   # 首轮后已有
+        await b._handle_command("u", "c", "m", "/clear")
+        assert s.native_id == ""   # 清空，下一轮无上下文
+    asyncio.run(run())
+
+
+def test_cmd_pwd_and_status():
+    async def run():
+        b = _bridge()
+        await b._forward("u", "c", "m", "hi")
+        await b._handle_command("u", "c", "m", "/pwd")
+        assert any("工作目录" in r for r in b.feishu.replies)
+        await b._handle_command("u", "c", "m", "/status")
+        assert any("Agent" in r and "状态" in r for r in b.feishu.replies)
+    asyncio.run(run())
+
+
+def test_cmd_rename_and_delete():
+    async def run():
+        b = _bridge()
+        await b._forward("u", "c", "m", "hi")
+        s = b.store.active("u", "c")
+        await b._handle_command("u", "c", "m", "/rename 我的任务")
+        assert s.title == "我的任务"
+        assert any("已重命名" in r for r in b.feishu.replies)
+        # 删除
+        await b._handle_command("u", "c", "m", f"/delete {s.session_id}")
+        assert any("已删除" in r for r in b.feishu.replies)
+        assert b.store.get("u", "c", s.session_id) is None
+        # 删不存在
+        await b._handle_command("u", "c", "m", "/delete nope")
+        assert any("未找到" in r for r in b.feishu.replies)
+    asyncio.run(run())
+
+
+def test_cmd_retry_no_prompt():
+    async def run():
+        b = _bridge()
+        b.store.create("u", "c")   # 空会话，无 last_prompt
+        await b._handle_command("u", "c", "m", "/retry")
+        assert any("无可重试" in r for r in b.feishu.replies)
     asyncio.run(run())
 
 

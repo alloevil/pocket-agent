@@ -34,6 +34,11 @@ class FakeFeishu:
     async def reply_text(self, mid, t):
         self.replies.append(t)
 
+    async def reply_card(self, mid, card):
+        parts = [card.get("header", {}).get("title", {}).get("content", "")]
+        parts += [e.get("content", "") for e in card.get("elements", []) if e.get("tag") == "markdown"]
+        self.replies.append("\n".join(parts))
+
     async def close(self):
         pass
 
