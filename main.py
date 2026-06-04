@@ -57,6 +57,21 @@ def cmd_setup():
     print("━" * 54)
     print("② 填入凭证（当场验证有效性）")
     print("━" * 54)
+    # 快捷方式：从飞书后台整段复制粘贴，程序自动拆出 App ID / Secret
+    print("  💡 可直接从「凭证与基础信息」页整段复制粘贴，自动识别；")
+    print("     或留空回车，逐栏手动输入。")
+    pasted = input("  粘贴在此（含 App ID 和 Secret 的任意文本）: ").strip()
+    if pasted:
+        pid, psec = _parse_credentials(pasted)
+        if pid:
+            config['feishu_app_id'] = pid
+            print(f"  ✓ 识别到 App ID：{pid}")
+        if psec:
+            config['feishu_app_secret'] = psec
+            print(f"  ✓ 识别到 App Secret：{psec[:6]}…")
+        if not (pid and psec):
+            print("  （未能全部识别，下面补齐缺的部分）")
+
     while True:
         app_id = input(f"  App ID [{config.get('feishu_app_id', '')}]: ").strip()
         if app_id:
@@ -140,6 +155,42 @@ def cmd_setup():
     if start != 'n':
         from pocket_agent.app import run
         run(str(CONFIG_PATH))
+
+
+def _parse_credentials(text: str) -> tuple[str, str]:
+    """从粘贴的任意文本里抽出 (app_id, app_secret)；抽不到的位置返回 ""。
+
+    兼容飞书后台常见的几种复制形态：
+      "App ID  cli_abc123\nApp Secret  Xy9..."   带标签
+      "cli_abc123  Xy9z..."                       裸两段
+      多行、中英文标签、冒号/空格分隔都尽量识别。
+    策略：App ID 用 `cli_` 前缀强特征锁定；Secret 优先取标签后的串，
+    否则取「不是 app_id 的那段较长字母数字」。
+    """
+    import re
+
+    app_id = ""
+    app_secret = ""
+
+    # 1) App ID：飞书自建应用 ID 形如 cli_xxxxxxxx
+    m = re.search(r"\bcli_[A-Za-z0-9]+\b", text)
+    if m:
+        app_id = m.group(0)
+
+    # 2) App Secret：先找显式标签（secret / 密钥）后面的串
+    m = re.search(r"(?:app\s*secret|secret|密钥)\W*([A-Za-z0-9]{16,})",
+                  text, re.IGNORECASE)
+    if m and m.group(1) != app_id:
+        app_secret = m.group(1)
+
+    # 3) 兜底：取所有「长字母数字串」里第一个不等于 app_id 的
+    if not app_secret:
+        for tok in re.findall(r"\b[A-Za-z0-9]{16,}\b", text):
+            if tok != app_id and not tok.startswith("cli_"):
+                app_secret = tok
+                break
+
+    return app_id, app_secret
 
 
 def _verify_feishu(app_id: str, app_secret: str) -> tuple[bool, str]:

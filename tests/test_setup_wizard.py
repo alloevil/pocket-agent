@@ -95,6 +95,44 @@ def test_resolve_owner_missing_field():
     assert oid == ""
 
 
+# ── 粘贴凭证自动解析 ──
+
+def test_parse_credentials_labeled():
+    text = "App ID  cli_a1b2c3d4e5f6\nApp Secret  Xy9zAbCdEfGh1234 Klm"
+    pid, psec = main._parse_credentials(text)
+    assert pid == "cli_a1b2c3d4e5f6"
+    assert psec == "Xy9zAbCdEfGh1234"
+
+
+def test_parse_credentials_chinese_label():
+    text = "应用 ID：cli_zzz111aaa222\n密钥: SECRETvalue9876543210"
+    pid, psec = main._parse_credentials(text)
+    assert pid == "cli_zzz111aaa222"
+    assert psec == "SECRETvalue9876543210"
+
+
+def test_parse_credentials_bare_two_tokens():
+    # 无标签，裸两段：cli_ 锁 id，另一长串当 secret
+    text = "cli_abc123def456  qwerASDF1234zxcv7890"
+    pid, psec = main._parse_credentials(text)
+    assert pid == "cli_abc123def456"
+    assert psec == "qwerASDF1234zxcv7890"
+
+
+def test_parse_credentials_id_only():
+    pid, psec = main._parse_credentials("cli_onlyid12345678")
+    assert pid == "cli_onlyid12345678"
+    assert psec == ""
+
+
+def test_parse_credentials_secret_not_mistaken_as_id():
+    # secret 标签后若是 app_id 形态，不能误当 secret；真正的 id 仍要锁对
+    text = "App Secret: cli_should_not_win\nApp ID cli_realid9999"
+    pid, psec = main._parse_credentials(text)
+    assert pid == "cli_realid9999"
+    assert psec != pid
+
+
 if __name__ == "__main__":
     import traceback
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
