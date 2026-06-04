@@ -91,7 +91,9 @@ class FeishuAPI:
         return {}
 
     async def send_text(self, receive_id: str, text: str,
-                        receive_id_type: str = "open_id") -> dict:
+                        receive_id_type: str = "chat_id") -> dict:
+        # 默认 chat_id：bridge 一律按会话(chat_id)发送，含 P2P 私聊（其 chat_id
+        # 形如 oc_…）。用 open_id 类型发 oc_ 值会因 id 类型不符而失败。
         return await self._request("POST", "/im/v1/messages",
             params={"receive_id_type": receive_id_type},
             json={
@@ -114,7 +116,8 @@ class FeishuAPI:
             json={"msg_type": "interactive", "content": json.dumps(card)})
 
     async def send_interactive(self, receive_id: str, card: dict,
-                               receive_id_type: str = "open_id") -> dict:
+                               receive_id_type: str = "chat_id") -> dict:
+        # 默认 chat_id：理由同 send_text。卡片几乎都发到某个会话。
         return await self._request("POST", "/im/v1/messages",
             params={"receive_id_type": receive_id_type},
             json={

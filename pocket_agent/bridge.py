@@ -110,6 +110,8 @@ class Bridge:
             chat_id = message.chat_id
             message_id = message.message_id
             sender_id = sender.sender_id.open_id
+            logger.info("收到消息 sender=%s chat=%s type=%s",
+                        sender_id, chat_id, message.message_type)
 
             if not self.config.is_allowed(sender_id):
                 # 私有默认：对非授权用户静默忽略，不回复——
