@@ -32,6 +32,10 @@ class Config:
     # ── 桥接 ──
     # 用户白名单（逗号分隔 open_id），为空允许所有
     allowed_users: str = ""
+    # 应用所有者 open_id（向导自动解析或运行时刷新写入）；永远放行，锁不死自己
+    bot_owner: str = ""
+    # 开箱私有：未配白名单且已知所有者时，仅所有者可用（更安全的默认）
+    private_by_default: bool = True
     # 消息更新节流间隔（秒）
     throttle_seconds: float = 3.0
     # 流式更新最小增量字符：自上次发送以来新增 < 此值则不触发 PATCH
@@ -65,10 +69,18 @@ class Config:
         return {u.strip() for u in self.allowed_users.split(",") if u.strip()}
 
     def is_allowed(self, user_id: str) -> bool:
-        allowed = self.allowed_user_set
-        if not allowed:
+        # 1) 所有者永远放行——即使白名单写错也锁不死自己
+        if self.bot_owner and user_id == self.bot_owner:
             return True
-        return user_id in allowed
+        allowed = self.allowed_user_set
+        # 2) 配了白名单：按白名单
+        if allowed:
+            return user_id in allowed
+        # 3) 白名单为空：私有默认 + 已知所有者 → 仅所有者（上面已放行，这里拒其他人）
+        if self.private_by_default and self.bot_owner:
+            return False
+        # 4) 既无白名单也无所有者：放行（兼容老配置 / 未绑定时不限制）
+        return True
 
     def validate(self) -> list[str]:
         """启动前自检：返回问题列表（空=通过）。快速失败，避免跑到一半才报错。"""

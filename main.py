@@ -42,6 +42,9 @@ def cmd_setup():
     print("  3) 权限管理 → 开通这两个权限：")
     print("       im:message.p2p_msg:readonly   （读私聊消息）")
     print("       im:message:send_as_bot        （发消息）")
+    print("     可选（推荐）：")
+    print("       application:application:self_manage （让程序自动认出你这个主人，")
+    print("                                           免去手动发消息绑定）")
     print("  4) 事件与回调 → 订阅方式 → 选「使用长连接接收事件」")
     print("  5) 事件与回调 → 添加事件 im.message.receive_v1；")
     print("                 添加回调 card.action.trigger")
@@ -99,22 +102,29 @@ def cmd_setup():
         ws = input(f"  Codex WebSocket URL [{config.get('codex_ws_url', 'ws://127.0.0.1:5123')}]: ").strip()
         config['codex_ws_url'] = ws or config.get('codex_ws_url', 'ws://127.0.0.1:5123')
 
-    # ── 第 4 步：绑定使用者（免查 open_id）──
+    # ── 第 4 步：绑定使用者（自动识别主人，失败回退发消息）──
     print()
     print("━" * 54)
-    print("④ 绑定使用者（可选，限制只有你能用）")
+    print("④ 绑定使用者（开箱只有你能用，更安全）")
     print("━" * 54)
     if config.get('feishu_app_id') and config.get('feishu_app_secret'):
-        print("  无需手动查 open_id：启动后在飞书给机器人发任意一条消息，")
-        print("  程序会自动把你识别为主人并写入白名单。")
-        do_bind = input("  现在就用「发消息绑定」？(Y/n): ").strip().lower()
-        if do_bind != 'n':
-            oid = _capture_open_id(config['feishu_app_id'], config['feishu_app_secret'])
-            if oid:
-                config['allowed_users'] = oid
-                print(f"  ✅ 已绑定：{oid}")
-            else:
-                print("  ⏭ 跳过绑定（allowed_users 留空 = 不限制，谁都能用）")
+        print("  正在尝试自动识别主人（需已开通 self_manage 权限）…")
+        oid = _resolve_owner(config['feishu_app_id'], config['feishu_app_secret'])
+        if oid:
+            config['bot_owner'] = oid
+            config['allowed_users'] = oid
+            print(f"  ✅ 已自动识别主人：{oid}（无需发消息）")
+        else:
+            print("  ℹ️  未能自动识别（多半是没开 self_manage 权限）。")
+            do_bind = input("  改用「发消息绑定」？启动后给机器人发条消息即可 (Y/n): ").strip().lower()
+            if do_bind != 'n':
+                oid = _capture_open_id(config['feishu_app_id'], config['feishu_app_secret'])
+                if oid:
+                    config['bot_owner'] = oid
+                    config['allowed_users'] = oid
+                    print(f"  ✅ 已绑定：{oid}")
+                else:
+                    print("  ⏭ 跳过绑定（allowed_users 留空 = 不限制，谁都能用）")
     else:
         print("  （凭证未就绪，跳过）")
 
@@ -153,6 +163,27 @@ def _verify_feishu(app_id: str, app_secret: str) -> tuple[bool, str]:
         return False, f"凭证无效：code={data.get('code')} {data.get('msg', '')}"
 
     return asyncio.run(_check())
+
+
+def _resolve_owner(app_id: str, app_secret: str) -> str:
+    """自动解析应用所有者的 open_id（同步封装）；失败返回 ""。
+
+    复用 FeishuAPI.get_app_owner（最佳努力，未开 self_manage 权限时返回 ""）。
+    """
+    import asyncio
+
+    async def _go():
+        from pocket_agent.feishu_client import FeishuAPI
+        api = FeishuAPI(app_id, app_secret)
+        try:
+            return await api.get_app_owner()
+        finally:
+            await api.close()
+
+    try:
+        return asyncio.run(_go())
+    except Exception:
+        return ""
 
 
 def _capture_open_id(app_id: str, app_secret: str, timeout: int = 120) -> str:

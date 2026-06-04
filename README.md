@@ -110,7 +110,8 @@ python main.py setup
 > 配置向导会分步引导你完成这一步并附直达链接；这里列出供参考。
 
 1. 在[飞书开放平台](https://open.feishu.cn/)创建企业自建应用，启用机器人能力
-2. 添加权限：`im:message.p2p_msg:readonly`、`im:message:send_as_bot`
+2. 添加权限：`im:message.p2p_msg:readonly`、`im:message:send_as_bot`；
+   可选（推荐）`application:application:self_manage` —— 让程序**自动认出你这个主人**，免去手动绑定
 3. 事件与回调 → 订阅方式 → **使用长连接接收事件**
 4. 添加事件 `im.message.receive_v1`，添加回调 `card.action.trigger`
 5. 发布应用，在「凭证与基础信息」拿到 **App ID** 和 **App Secret**
@@ -124,7 +125,10 @@ uv run python main.py setup        # 标准 venv 下用 python main.py setup
 ```
 
 向导全程引导：① 分步教你建飞书应用 → ② 填凭证并**立即验证**有效性 → ③ 选 agent →
-④ **绑定使用者**（无需查 open_id：启动后在飞书给机器人发条消息即自动绑定）→ 保存并启动。
+④ **绑定使用者**（开了 `self_manage` 权限则**自动识别主人、零操作**；否则回退到「启动后给机器人发条消息」自动绑定）→ 保存并启动。
+
+> 开箱**私有默认**：绑定后只有你能用，其他人发来的消息静默忽略；且**永远锁不死自己**——
+> 程序运行时会周期性从飞书重新确认应用所有者。
 
 <details>
 <summary>或手动编辑 config.json（点击展开）</summary>
@@ -177,6 +181,8 @@ uv run python main.py     # 再次运行启动
 | `heartbeat_seconds` | 运行中心跳刷新间隔；0=关闭 | `15` |
 | `notify_done_seconds` | 长任务完成主动提醒阈值；0=关闭 | `0` |
 | `allowed_users` | 用户白名单（逗号分隔 open_id，空=不限） | `""` |
+| `bot_owner` | 应用所有者 open_id（向导/运行时自动写入，永远放行，锁不死自己） | `""` |
+| `private_by_default` | 开箱私有：未配白名单且已知所有者时仅所有者可用 | `true` |
 
 ## 🗂 项目结构
 

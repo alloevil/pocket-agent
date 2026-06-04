@@ -23,6 +23,10 @@ class _Session:
     async def __aenter__(self): return self
     async def __aexit__(self, *a): pass
     def post(self, *a, **k): return _Resp(self._d)
+    def request(self, *a, **k): return _Resp(self._d)
+    @property
+    def closed(self): return False
+    async def close(self): pass
 
 
 def _patch_aiohttp(data):
@@ -56,6 +60,39 @@ def test_verify_feishu_network_error():
 def test_agents_constant():
     # 向导支持的 agent 与后端一致
     assert set(main._AGENTS) == {"claude", "opencode", "codex"}
+
+
+# ── 自动解析应用所有者（零配置绑定）──
+# 注：_request 会先 post 取 token，再 request 业务接口；共享 mock 对两次返回同一 data，
+# 故测试 payload 同时含 tenant_access_token 与 owner 字段。
+
+def test_resolve_owner_success():
+    data = {
+        "tenant_access_token": "t-xxx", "expire": 7200,
+        "code": 0,
+        "data": {"app": {"owner": {"owner_id": "ou_owner123"}}},
+    }
+    with _patch_aiohttp(data):
+        oid = main._resolve_owner("cli_x", "secret")
+    assert oid == "ou_owner123"
+
+
+def test_resolve_owner_no_permission():
+    # 未开 self_manage：飞书返回非 0 code，应安静返回 ""
+    data = {"tenant_access_token": "t-xxx", "expire": 7200,
+            "code": 99991672, "msg": "permission denied"}
+    with _patch_aiohttp(data):
+        oid = main._resolve_owner("cli_x", "secret")
+    assert oid == ""
+
+
+def test_resolve_owner_missing_field():
+    # code=0 但响应里没有 owner_id → ""
+    data = {"tenant_access_token": "t-xxx", "expire": 7200,
+            "code": 0, "data": {"app": {}}}
+    with _patch_aiohttp(data):
+        oid = main._resolve_owner("cli_x", "secret")
+    assert oid == ""
 
 
 if __name__ == "__main__":

@@ -122,6 +122,23 @@ def test_config_allowed_users():
     assert Config(allowed_users="").is_allowed("anyone")
 
 
+def test_is_allowed_owner_branches():
+    # 1) 所有者永远放行——即使白名单写错也锁不死自己
+    c = Config(bot_owner="owner", allowed_users="someone_else")
+    assert c.is_allowed("owner")
+    assert not c.is_allowed("someone_else_random")
+    # 2) 白名单优先：配了白名单按白名单（非所有者按名单判定）
+    assert Config(bot_owner="owner", allowed_users="x").is_allowed("x")
+    # 3) 私有默认 + 已知所有者 + 空白名单 → 仅所有者，其他人拒
+    c = Config(bot_owner="owner")
+    assert c.is_allowed("owner")
+    assert not c.is_allowed("stranger")
+    # 4) 兼容老配置：无所有者、空白名单 → 放行所有人
+    assert Config().is_allowed("anyone")
+    # private_by_default=False 时，即使有所有者、空白名单也放行
+    assert Config(bot_owner="owner", private_by_default=False).is_allowed("anyone")
+
+
 if __name__ == "__main__":
     import traceback
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

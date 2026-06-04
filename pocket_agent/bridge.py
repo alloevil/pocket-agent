@@ -41,16 +41,39 @@ class Bridge:
         self._welcomed: set = set()    # 已发过欢迎引导的 (user,chat)
         self._heartbeats: dict = {}    # session_id -> 心跳 asyncio.Task
         self._event_task = None
+        self._owner_task = None
+
+    # 所有者刷新间隔（秒）：飞书后台转移应用所有权后 bot 自动跟随
+    OWNER_REFRESH_SECONDS = 30 * 60
 
     async def start(self):
         logger.info("Starting backend: %s", self.agent_name)
         await self.backend.start()
         logger.info("Backend %s ready", self.agent_name)
         self._event_task = asyncio.create_task(self._consume_events())
+        self._owner_task = asyncio.create_task(self._refresh_owner_loop())
+
+    async def _refresh_owner_loop(self):
+        """周期性解析应用所有者写入 config.bot_owner（最佳努力，失败只 warn）。
+
+        启动即刷新一次：向导未绑定成功也能在运行时补上；之后每 30 分钟一次，
+        使飞书后台转移所有权后 bot 自动跟随主人（永远锁不死自己）。
+        """
+        while True:
+            try:
+                oid = await self.feishu.get_app_owner()
+                if oid and oid != self.config.bot_owner:
+                    self.config.bot_owner = oid
+                    logger.info("Bot owner resolved: %s", oid)
+            except Exception as e:
+                logger.warning("owner refresh failed: %s", e)
+            await asyncio.sleep(self.OWNER_REFRESH_SECONDS)
 
     async def shutdown(self):
         if self._event_task:
             self._event_task.cancel()
+        if self._owner_task:
+            self._owner_task.cancel()
         for task in list(self._heartbeats.values()):
             task.cancel()
         self.store.save()
@@ -89,7 +112,9 @@ class Bridge:
             sender_id = sender.sender_id.open_id
 
             if not self.config.is_allowed(sender_id):
-                await self.feishu.reply_text(message_id, "⛔ 无权限")
+                # 私有默认：对非授权用户静默忽略，不回复——
+                # 回「无权限」只会向陌生人确认 bot 的存在，反而暴露。
+                logger.info("ignored message from non-allowed user %s", sender_id)
                 return
 
             # 非文本消息不再静默：明确告知只支持文字，避免用户以为机器人坏了

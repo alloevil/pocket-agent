@@ -123,6 +123,27 @@ class FeishuAPI:
                 "content": json.dumps(card),
             })
 
+    async def get_app_owner(self) -> str:
+        """查询本应用所有者的 open_id（最佳努力）。
+
+        用于「零配置绑定」：填完凭证即可自动识别主人，无需用户发消息。
+        需应用开通 application:application:self_manage 权限；未开通时飞书
+        返回非 0 code，这里安静返回 "" 让调用方回退到「发消息绑定」。
+        """
+        try:
+            data = await self._request(
+                "GET", "/application/v6/applications/me",
+                params={"user_id_type": "open_id", "lang": "zh_cn"})
+        except Exception as e:
+            logger.warning("get_app_owner failed: %s", e)
+            return ""
+        if data.get("code") == 0:
+            owner = data.get("data", {}).get("app", {}).get("owner", {})
+            return owner.get("owner_id", "") or ""
+        logger.info("get_app_owner non-zero code=%s msg=%s (缺 self_manage 权限?)",
+                    data.get("code"), data.get("msg"))
+        return ""
+
     async def add_reaction(self, message_id: str, emoji_type: str) -> dict:
         return await self._request("POST", f"/im/v1/messages/{message_id}/reactions",
             json={"reaction_type": {"emoji_type": emoji_type}})
