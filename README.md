@@ -67,48 +67,64 @@
   - opencode — `opencode --version`（需 `opencode auth login` 配好模型）
   - Codex — 另起 `codex remote-control`（默认 `ws://localhost:5123`）
 
-### 1. 克隆与安装
+### 1. 一键安装（推荐）
 
-推荐用 [uv](https://docs.astral.sh/uv/)（现代 Python 包管理器，比 pip 快一两个数量级，自动管理虚拟环境）：
+一条命令搞定：安装 uv → 克隆仓库 → 装依赖 → 进入配置向导。
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/alloevil/pocket-agent/main/install.sh | sh
+```
+
+> 介意 `curl | sh`？先下载看一眼再运行：
+> ```bash
+> curl -LO https://raw.githubusercontent.com/alloevil/pocket-agent/main/install.sh
+> less install.sh && sh install.sh
+> ```
+
+脚本默认装到 `~/pocket-agent`（可用 `POCKET_AGENT_DIR=/your/path` 自定义），可重复运行（已存在则更新）。
+
+<details>
+<summary>手动安装（用 uv 或传统 venv，点击展开）</summary>
 
 ```bash
 git clone https://github.com/alloevil/pocket-agent.git
 cd pocket-agent
 
-# 安装 uv（如未安装）：curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync                  # 自动创建 .venv 并按 uv.lock 安装精确依赖
-```
+# 方式 A：uv（推荐，比 pip 快一两个数量级，自动管理虚拟环境）
+# 装 uv：curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync                          # 按 uv.lock 安装精确依赖
+uv run python main.py setup      # 进入配置向导
 
-之后用 `uv run python main.py` 运行，无需手动激活虚拟环境。
-
-<details>
-<summary>不想用 uv？用标准 venv + pip（点击展开）</summary>
-
-```bash
+# 方式 B：标准 venv + pip
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e .                 # 从 pyproject.toml 安装
+pip install -e .
+python main.py setup
 ```
 </details>
 
+> 一键脚本只把**环境**准备到「可以开始配置」——飞书凭证仍需你到开放平台获取（见下一步），向导会引导你完成。
+
 ### 2. 创建飞书应用
+
+> 配置向导会分步引导你完成这一步并附直达链接；这里列出供参考。
 
 1. 在[飞书开放平台](https://open.feishu.cn/)创建企业自建应用，启用机器人能力
 2. 添加权限：`im:message.p2p_msg:readonly`、`im:message:send_as_bot`
 3. 事件与回调 → 订阅方式 → **使用长连接接收事件**
 4. 添加事件 `im.message.receive_v1`，添加回调 `card.action.trigger`
-5. 发布应用，记下 **App ID** 和 **App Secret**
+5. 发布应用，在「凭证与基础信息」拿到 **App ID** 和 **App Secret**
 
-### 3. 配置并运行
+### 3. 配置
 
-**推荐用交互式向导**，全程引导、当场验证凭证、还能扫脸式绑定使用者：
+一键安装会自动进入**配置向导**；手动安装则运行：
 
 ```bash
-uv run python main.py setup
+uv run python main.py setup        # 标准 venv 下用 python main.py setup
 ```
 
-向导会：① 分步教你建飞书应用 → ② 填凭证并**立即验证**有效性 → ③ 选 agent →
-④ **绑定使用者**（无需查 open_id，启动后在飞书给机器人发条消息即自动绑定）→ 保存并启动。
+向导全程引导：① 分步教你建飞书应用 → ② 填凭证并**立即验证**有效性 → ③ 选 agent →
+④ **绑定使用者**（无需查 open_id：启动后在飞书给机器人发条消息即自动绑定）→ 保存并启动。
 
 <details>
 <summary>或手动编辑 config.json（点击展开）</summary>
@@ -118,11 +134,10 @@ uv run python main.py     # 首次运行自动生成 config.json 并提示
 # 编辑 config.json：填入飞书凭证、选择 agent、设置 workdir
 uv run python main.py     # 再次运行启动
 ```
-</details>
 
-> 用标准 venv 时把 `uv run python` 换成激活环境后的 `python` 即可。
 > 首次直接运行不会报错崩溃：缺 `config.json` 会自动从模板生成并提示下一步；
 > 配置缺凭证 / agent 无效 / CLI 未安装时，启动前会给出清晰提示。
+</details>
 
 ## 📲 使用
 
@@ -168,6 +183,7 @@ uv run python main.py     # 再次运行启动
 ```
 pocket-agent/
 ├── main.py                       # 入口 / 配置向导
+├── install.sh                    # 一键安装脚本
 ├── config.example.json           # 配置模板
 ├── pyproject.toml                # 依赖与项目元数据
 ├── uv.lock                       # 锁定的精确依赖（可复现安装）
