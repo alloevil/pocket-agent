@@ -16,6 +16,7 @@ from .feishu_client import FeishuAPI
 from .backends import create_backend, SUPPORTED_BACKENDS
 from .renderer_base import Renderer
 from .renderer import info_card
+from . import claude_sessions
 from .renderer import CardRenderer
 from .session_store import SessionStore
 
@@ -406,6 +407,9 @@ class Bridge:
         elif command == "/loop":
             await self._cmd_loop(user_id, chat_id, message_id, arg)
 
+        elif command == "/history":
+            await self._cmd_history(user_id, chat_id, message_id, arg)
+
         elif command == "/agent":
             await self.feishu.reply_card(message_id, info_card(
                 "🤖 当前 Agent",
@@ -435,6 +439,7 @@ class Bridge:
                 "**会话**\n"
                 "`/new` 新对话　`/list` 列出会话\n"
                 "`/switch <id>` 切换　`/resume <id>` 恢复历史\n"
+                "`/history` claude 本地历史会话\n"
                 "`/rename <名>` 改标题　`/delete <id>` 删除\n"
                 "`/clear` 清空上下文\n\n"
                 "**设置**\n"
@@ -451,27 +456,96 @@ class Bridge:
             known = ["/new", "/list", "/switch", "/resume", "/cd", "/model",
                      "/stop", "/usage", "/agent", "/help",
                      "/clear", "/retry", "/pwd", "/status", "/rename",
-                     "/delete", "/loop"]
+                     "/delete", "/loop", "/history"]
             near = difflib.get_close_matches(command, known, n=1, cutoff=0.5)
             tip = f"你是说 `{near[0]}` 吗？" if near else "发送 `/help` 查看可用命令。"
             await self.feishu.reply_card(message_id, info_card(
                 "❓ 未知命令", f"`{command}`\n\n{tip}", template="red"))
 
     async def _cmd_resume(self, user_id, chat_id, message_id, arg):
-        """恢复一个历史会话为活跃（后端续接靠 native_id，下一轮自然带上）。"""
+        """恢复会话为活跃。先在 store 内找短 id（s1…）；找不到再尝试
+        claude 本地历史 session（完整 UUID 或前缀），建新会话续接其上下文。"""
         if not arg:
             await self.feishu.reply_card(message_id, info_card(
-                "❓ 用法", "`/resume <会话id>`，先用 `/list` 查看", template="red"))
+                "❓ 用法", "`/resume <会话id>`，先用 `/list` 或 `/history` 查看",
+                template="red"))
             return
+        # 1) store 内短 id
         s = self.store.get(user_id, chat_id, arg)
-        if not s:
+        if s:
+            self.store.switch(user_id, chat_id, arg)
+            tip = "将续接之前的上下文" if s.native_id else "无后端记录，将作为新会话"
             await self.feishu.reply_card(message_id, info_card(
-                "❓ 未找到", f"没有会话 `{arg}`", template="red"))
+                "✅ 已恢复会话", f"`{arg}`  {s.title or ''}\n\n{tip}", template="green"))
             return
-        self.store.switch(user_id, chat_id, arg)
-        tip = "将续接之前的上下文" if s.native_id else "无后端记录，将作为新会话"
+        # 2) claude 本地历史（仅 claude 后端）
+        if self.agent_name == "claude":
+            workdir = self._current_workdir(user_id, chat_id)
+            hit = claude_sessions.session_exists(workdir, arg)
+            if not hit:
+                # 支持前缀匹配（用户从 /history 复制前 8 位）
+                cands = [x for x in claude_sessions.list_sessions(workdir, limit=100)
+                         if x["id"].startswith(arg)]
+                if len(cands) == 1:
+                    hit = {"id": cands[0]["id"], "cwd": cands[0]["cwd"]}
+                elif len(cands) > 1:
+                    await self.feishu.reply_card(message_id, info_card(
+                        "❓ 多个匹配", f"`{arg}` 匹配到 {len(cands)} 个会话，"
+                        "请用更完整的 id。", template="red"))
+                    return
+            if hit:
+                ns = self.store.create(user_id, chat_id,
+                                       title=f"恢复 {hit['id'][:8]}")
+                ns.native_id = hit["id"]          # → 下一轮 --resume <UUID>
+                ns.workdir_override = hit["cwd"]   # claude session 绑定其原 cwd
+                await self.feishu.reply_card(message_id, info_card(
+                    "✅ 已恢复 claude 历史会话",
+                    f"`{hit['id'][:8]}`（目录 `{hit['cwd']}`）\n\n"
+                    "直接发消息即可续接上下文。", template="green"))
+                return
         await self.feishu.reply_card(message_id, info_card(
-            "✅ 已恢复会话", f"`{arg}`  {s.title or ''}\n\n{tip}", template="green"))
+            "❓ 未找到", f"没有会话 `{arg}`，用 `/list` 或 `/history` 查看。",
+            template="red"))
+
+    def _current_workdir(self, user_id, chat_id) -> str:
+        """当前会话的有效工作目录（会话覆盖优先，否则全局）。"""
+        s = self.store.active(user_id, chat_id)
+        return (s.workdir_override if s else "") or self.config.workdir
+
+    async def _cmd_history(self, user_id, chat_id, message_id, arg):
+        """列出 claude 本地历史 session（默认当前 workdir；`all` 列全部分组）。"""
+        if self.agent_name != "claude":
+            await self.feishu.reply_card(message_id, info_card(
+                "ℹ️ 仅 claude 支持", "本地历史会话功能仅 claude 后端可用。", template="blue"))
+            return
+
+        if arg.strip().lower() == "all":
+            groups = claude_sessions.list_all_grouped()
+            if not groups:
+                await self.feishu.reply_card(message_id, info_card(
+                    "🕘 历史会话", "没有找到任何本地历史会话。", template="blue"))
+                return
+            lines = []
+            for g in groups:
+                lines.append(f"**{g['project']}**")
+                for s in g["sessions"]:
+                    lines.append(f"　`{s['id'][:8]}`  {s['summary']}  ·  {s['rel']}")
+            await self.feishu.reply_card(message_id, info_card(
+                "🕘 全部历史会话", "\n".join(lines), template="blue",
+                footer="/resume <完整id> 恢复（跨目录会自动切到其原目录）"))
+            return
+
+        workdir = self._current_workdir(user_id, chat_id)
+        sessions = claude_sessions.list_sessions(workdir)
+        if not sessions:
+            await self.feishu.reply_card(message_id, info_card(
+                "🕘 历史会话", f"当前目录 `{workdir}` 没有 claude 历史会话。\n\n"
+                "`/history all` 可查看全部项目。", template="blue"))
+            return
+        lines = [f"`{s['id'][:8]}`  {s['summary']}  ·  {s['rel']}" for s in sessions]
+        await self.feishu.reply_card(message_id, info_card(
+            "🕘 历史会话", "\n".join(lines), template="blue",
+            footer="/resume <id前8位或完整id> 恢复 · /history all 看全部"))
 
     # ── /loop 自循环 ──
 

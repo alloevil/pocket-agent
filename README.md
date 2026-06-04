@@ -154,6 +154,7 @@ uv run python main.py     # 再次运行启动
 | `/list` | 列出当前聊天的所有对话 |
 | `/switch <id>` | 切换对话 |
 | `/resume <id>` | 恢复历史对话（续接上下文） |
+| `/history` | 列出 claude 本地历史会话（`/history all` 看全部项目）；`/resume <id>` 可接回 |
 | `/rename <名>` | 重命名当前对话 |
 | `/delete <id>` | 删除指定对话 |
 | `/clear` | 清空当前对话上下文（保留 id，下一轮从零开始） |

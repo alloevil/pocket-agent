@@ -277,6 +277,67 @@ def test_cmd_retry_no_prompt():
     asyncio.run(run())
 
 
+# ── /history + /resume 接 claude 本地历史 ──
+
+def test_cmd_history_lists_sessions():
+    async def run():
+        from pocket_agent import claude_sessions
+        b = _bridge()
+        b.agent_name = "claude"
+        orig = claude_sessions.list_sessions
+        claude_sessions.list_sessions = lambda wd, **k: [
+            {"id": "abcd1234efgh", "summary": "改个 bug", "rel": "2小时前", "cwd": "/x"}]
+        try:
+            await b._handle_command("u", "c", "m", "/history")
+        finally:
+            claude_sessions.list_sessions = orig
+        assert any("abcd1234" in r and "改个 bug" in r for r in b.feishu.replies)
+    asyncio.run(run())
+
+
+def test_cmd_history_non_claude():
+    async def run():
+        b = _bridge()           # codex 后端
+        await b._handle_command("u", "c", "m", "/history")
+        assert any("仅 claude" in r for r in b.feishu.replies)
+    asyncio.run(run())
+
+
+def test_resume_external_uuid():
+    async def run():
+        from pocket_agent import claude_sessions
+        b = _bridge()
+        b.agent_name = "claude"
+        orig = claude_sessions.session_exists
+        claude_sessions.session_exists = lambda wd, sid: (
+            {"id": "uuid-1234", "cwd": "/proj/x"} if sid == "uuid-1234" else None)
+        try:
+            await b._handle_command("u", "c", "m", "/resume uuid-1234")
+        finally:
+            claude_sessions.session_exists = orig
+        s = b.store.active("u", "c")
+        assert s.native_id == "uuid-1234"           # 下一轮 --resume
+        assert s.workdir_override == "/proj/x"        # 绑回原 cwd
+        assert any("已恢复 claude 历史" in r for r in b.feishu.replies)
+    asyncio.run(run())
+
+
+def test_resume_unknown_id():
+    async def run():
+        from pocket_agent import claude_sessions
+        b = _bridge()
+        b.agent_name = "claude"
+        orig_e, orig_l = claude_sessions.session_exists, claude_sessions.list_sessions
+        claude_sessions.session_exists = lambda wd, sid: None
+        claude_sessions.list_sessions = lambda wd, **k: []
+        try:
+            await b._handle_command("u", "c", "m", "/resume nope999")
+        finally:
+            claude_sessions.session_exists, claude_sessions.list_sessions = orig_e, orig_l
+        assert any("未找到" in r for r in b.feishu.replies)
+    asyncio.run(run())
+
+
 if __name__ == "__main__":
     import traceback
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
