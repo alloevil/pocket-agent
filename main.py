@@ -122,96 +122,127 @@ def _scopes_import_json() -> str:
 
 def _open_link(url: str):
     """打印一个（多数终端可点击的）链接"""
-    print(f"  🔗 {url}")
+    print(f"  🔗 {C.link(url)}")
+
+
+# ── 终端配色（无 tty / NO_COLOR 时自动降级为无色）──
+class _Palette:
+    def __init__(self):
+        import os
+        enabled = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+        self._on = enabled
+
+    def _w(self, code: str, s: str) -> str:
+        return f"\033[{code}m{s}\033[0m" if self._on else s
+
+    def bold(self, s):   return self._w("1", s)
+    def dim(self, s):    return self._w("2", s)
+    def red(self, s):    return self._w("31", s)
+    def green(self, s):  return self._w("32", s)
+    def yellow(self, s): return self._w("33", s)
+    def blue(self, s):   return self._w("34", s)
+    def cyan(self, s):   return self._w("36", s)
+    def link(self, s):   return self._w("4;36", s)        # 下划线青
+    def title(self, s):  return self._w("1;36", s)        # 粗体青
+    def key(self, s):    return self._w("1;33", s)         # 粗体黄：重点项
+
+C = _Palette()
+
+
+def _h1(num: str, text: str):
+    """带分隔线的步骤大标题"""
+    bar = "━" * 54
+    print(C.cyan(bar))
+    print(f"{C.title(num)} {C.bold(text)}")
+    print(C.cyan(bar))
+
+
+def _ok(msg: str):    print(f"  {C.green('✅ ' + msg)}")
+def _warn(msg: str):  print(f"  {C.yellow('⚠️  ' + msg)}")
+def _info(msg: str):  print(f"  {C.blue('ℹ️  ' + msg)}")
+def _hint(msg: str):  print(f"  {C.dim('💡 ' + msg)}")
 
 
 def cmd_setup():
     """交互式配置向导：建应用引导 → 填凭证(当场验证) → 选 agent → 扫脸绑定 → 保存启动"""
-    print("\n🤖 Pocket Agent — 配置向导\n")
+    print(f"\n{C.title('🤖 Pocket Agent — 配置向导')}\n")
 
     config = {}
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
             config = json.load(f)
-        print(f"  找到已有配置：{CONFIG_PATH}（回车保留原值）\n")
+        print(C.dim(f"  找到已有配置：{CONFIG_PATH}（回车保留原值）\n"))
 
     # ── 第 1 步：创建飞书应用（平台要求人工创建，无法跳过，这里讲到最细）──
-    print("━" * 54)
-    print("① 创建飞书应用（约 2 分钟，只需一次）")
-    print("━" * 54)
-    print("  在飞书开放平台按下面几步操作（清单可直接整段复制）：")
+    _h1("①", "创建飞书应用（约 2 分钟，只需一次）")
+    print(f"  在飞书开放平台按下面几步操作（{C.bold('蓝色')}为入口，{C.key('黄色')}为要复制/勾选的重点）：")
     print()
-    print("  1) 打开开放平台 → 创建企业自建应用：")
+    print(f"  {C.bold('1)')} 打开开放平台 → 创建{C.bold('企业自建应用')}：")
     _open_link("https://open.feishu.cn/app")
-    print("  2) 应用能力 → 添加「机器人」")
+    print(f"  {C.bold('2)')} 应用能力 → 添加 {C.key('「机器人」')}")
     print()
-    print("  3) 权限管理 → 「批量导入」，把下面整段 JSON 粘进去（一次开齐全部能力）：")
-    print("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-    print(_scopes_import_json())
-    print("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-    print("     （含 im / docs / sheets / base / wiki / task 等全部权限；")
-    print("       本程序核心只需 im 那几项，多开的为日后扩展功能预留，可按需删减）")
+    print(f"  {C.bold('3)')} 权限管理 → {C.key('「批量导入」')} → 把下面整段 JSON 粘进去（{C.bold('一次开齐全部能力')}）：")
+    print(C.dim("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 复制以下 JSON ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄"))
+    print(C.green(_scopes_import_json()))
+    print(C.dim("  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄"))
+    print(C.dim("     含 im / docs / sheets / base / wiki / task 等全部权限；"))
+    print(C.dim("     本程序核心只需 im 那几项，多开的为日后扩展功能预留，可按需删减。"))
     print()
-    print("  4) 事件与回调 → 订阅方式 → 选「使用长连接接收事件」")
-    print(f"  5) 事件与回调 → 添加事件：{'  '.join(_REQUIRED_EVENTS)}")
-    print(f"                 添加回调：{'  '.join(_REQUIRED_CALLBACKS)}")
-    print("  6) 版本管理与发布 → 创建版本并发布（企业内可用即可）")
+    print(f"  {C.bold('4)')} 事件与回调 → 订阅方式 → 选 {C.key('「使用长连接接收事件」')}")
+    print(f"  {C.bold('5)')} 事件与回调 → 添加事件：{C.key('  '.join(_REQUIRED_EVENTS))}")
+    print(f"                 添加回调：{C.key('  '.join(_REQUIRED_CALLBACKS))}")
+    print(f"  {C.bold('6)')} 版本管理与发布 → 创建版本并{C.bold('发布')}（企业内可用即可）")
     print()
-    print("  完成后在「凭证与基础信息」页可看到 App ID / App Secret。")
+    print(f"  完成后在 {C.key('「凭证与基础信息」')} 页可看到 {C.key('App ID')} / {C.key('App Secret')}。")
     print()
 
     # ── 第 2 步：填凭证 + 当场验证 ──
-    print("━" * 54)
-    print("② 填入凭证（当场验证有效性）")
-    print("━" * 54)
+    _h1("②", "填入凭证（当场验证有效性）")
     # 快捷方式：从飞书后台整段复制粘贴，程序自动拆出 App ID / Secret
-    print("  💡 可直接从「凭证与基础信息」页整段复制粘贴，自动识别；")
-    print("     或留空回车，逐栏手动输入。")
-    pasted = input("  粘贴在此（含 App ID 和 Secret 的任意文本）: ").strip()
+    _hint(f"可直接从 {C.key('「凭证与基础信息」')} 页整段复制粘贴，自动识别；或留空回车，逐栏手动输入。")
+    pasted = input(f"  {C.bold('粘贴在此')}（含 App ID 和 Secret 的任意文本）: ").strip()
     if pasted:
         pid, psec = _parse_credentials(pasted)
         if pid:
             config['feishu_app_id'] = pid
-            print(f"  ✓ 识别到 App ID：{pid}")
+            print(f"  {C.green('✓')} 识别到 App ID：{C.cyan(pid)}")
         if psec:
             config['feishu_app_secret'] = psec
-            print(f"  ✓ 识别到 App Secret：{psec[:6]}…")
+            print(f"  {C.green('✓')} 识别到 App Secret：{C.cyan(psec[:6] + '…')}")
         if not (pid and psec):
-            print("  （未能全部识别，下面补齐缺的部分）")
+            _warn("未能全部识别，下面补齐缺的部分")
 
     while True:
-        app_id = input(f"  App ID [{config.get('feishu_app_id', '')}]: ").strip()
+        app_id = input(f"  App ID [{C.dim(config.get('feishu_app_id', ''))}]: ").strip()
         if app_id:
             config['feishu_app_id'] = app_id
         if not config.get('feishu_app_id'):
-            print("  ❌ App ID 不能为空"); continue
+            print(f"  {C.red('❌ App ID 不能为空')}"); continue
 
         secret_shown = (config.get('feishu_app_secret', '')[:6] + "…") if config.get('feishu_app_secret') else ""
-        app_secret = input(f"  App Secret [{secret_shown}]: ").strip()
+        app_secret = input(f"  App Secret [{C.dim(secret_shown)}]: ").strip()
         if app_secret:
             config['feishu_app_secret'] = app_secret
         if not config.get('feishu_app_secret'):
-            print("  ❌ App Secret 不能为空"); continue
+            print(f"  {C.red('❌ App Secret 不能为空')}"); continue
 
-        print("\n  正在验证凭证…")
+        print(C.dim("\n  正在验证凭证…"))
         ok, msg = _verify_feishu(config['feishu_app_id'], config['feishu_app_secret'])
-        print(f"  {'✅' if ok else '❌'} {msg}")
         if ok:
-            break
+            _ok(msg); break
+        print(f"  {C.red('❌ ' + msg)}")
         retry = input("  凭证有误，重新输入？(Y/n): ").strip().lower()
         if retry == 'n':
             break
 
     # ── 第 3 步：选 agent ──
     print()
-    print("━" * 54)
-    print("③ 选择 agent")
-    print("━" * 54)
+    _h1("③", "选择 agent")
     cur = config.get('agent', 'claude')
-    print(f"  可选：{' / '.join(_AGENTS)}")
-    agent = input(f"  使用哪个 agent？[{cur}]: ").strip().lower()
+    print(f"  可选：{C.cyan(' / '.join(_AGENTS))}")
+    agent = input(f"  使用哪个 agent？[{C.dim(cur)}]: ").strip().lower()
     config['agent'] = agent if agent in _AGENTS else cur
-    print(f"  → {config['agent']}")
+    print(f"  → {C.green(config['agent'])}")
 
     if config['agent'] in ('claude', 'opencode'):
         wd = input(f"  工作目录 workdir [{config.get('workdir', '.')}]: ").strip()
@@ -226,39 +257,37 @@ def cmd_setup():
 
     # ── 第 4 步：绑定使用者（自动识别主人，失败回退发消息）──
     print()
-    print("━" * 54)
-    print("④ 绑定使用者（开箱只有你能用，更安全）")
-    print("━" * 54)
+    _h1("④", "绑定使用者（开箱只有你能用，更安全）")
     if config.get('feishu_app_id') and config.get('feishu_app_secret'):
-        print("  正在尝试自动识别主人（需已开通 self_manage 权限）…")
+        print(C.dim("  正在尝试自动识别主人（需已开通 self_manage 权限）…"))
         oid = _resolve_owner(config['feishu_app_id'], config['feishu_app_secret'])
         if oid:
             config['bot_owner'] = oid
             config['allowed_users'] = oid
-            print(f"  ✅ 已自动识别主人：{oid}（无需发消息）")
+            _ok(f"已自动识别主人：{C.cyan(oid)}（无需发消息）")
         else:
-            print("  ℹ️  未能自动识别（多半是没开 self_manage 权限）。")
+            _info("未能自动识别（多半是没开 self_manage 权限）。")
             do_bind = input("  改用「发消息绑定」？启动后给机器人发条消息即可 (Y/n): ").strip().lower()
             if do_bind != 'n':
                 oid = _capture_open_id(config['feishu_app_id'], config['feishu_app_secret'])
                 if oid:
                     config['bot_owner'] = oid
                     config['allowed_users'] = oid
-                    print(f"  ✅ 已绑定：{oid}")
+                    _ok(f"已绑定：{C.cyan(oid)}")
                 else:
-                    print("  ⏭ 跳过绑定（allowed_users 留空 = 不限制，谁都能用）")
+                    _warn("跳过绑定（allowed_users 留空 = 不限制，谁都能用）")
     else:
-        print("  （凭证未就绪，跳过）")
+        print(C.dim("  （凭证未就绪，跳过）"))
 
     # ── 保存 ──
     print()
     with open(CONFIG_PATH, 'w') as f:
         json.dump(config, f, indent=4, ensure_ascii=False)
-    print(f"  💾 配置已保存到 {CONFIG_PATH}")
+    _ok(f"配置已保存到 {C.cyan(str(CONFIG_PATH))}")
 
     # ── 启动 ──
     print()
-    start = input("  现在启动？(Y/n): ").strip().lower()
+    start = input(f"  {C.bold('现在启动？')} (Y/n): ").strip().lower()
     if start != 'n':
         from pocket_agent.app import run
         run(str(CONFIG_PATH))
