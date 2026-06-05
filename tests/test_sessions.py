@@ -94,6 +94,17 @@ def test_approval_card_includes_diff():
     assert "```diff" in body and "- x" in body and "+ y" in body
 
 
+def test_read_approval_not_labeled_as_modify():
+    # Read 类审批应显示「读取」而非「文件修改」，避免误导
+    r = CardRenderer("claude")
+    s = AgentSession(user_id="u", chat_id="c")
+    card = r.render_approval(s, "a1", "read", "/some/file.jsonl", "Read")
+    title = card["header"]["title"]["content"]
+    body = card["elements"][0]["content"]
+    assert "读取" in title and "修改" not in title
+    assert "读取" in body
+
+
 # ── bridge 命令 ──
 
 class _FakeFeishu:

@@ -412,6 +412,11 @@ class CardRenderer(Renderer):
             head = f"**目录：** `{detail}`\n\n" if detail else ""
             body = f"{ctx}{head}**命令：**\n```\n{text}\n```"
             ok_text, no_text = "✅ 允许执行", "❌ 拒绝"
+        elif kind == "read":
+            title, template = "📄 文件读取审批", "blue"
+            tool = f"`{detail}`  " if detail else ""
+            body = f"{ctx}{tool}**读取：** {text}"
+            ok_text, no_text = "✅ 允许", "❌ 拒绝"
         else:
             title, template = "📝 文件修改审批", "blue"
             tool = f"`{detail}`  " if detail else ""

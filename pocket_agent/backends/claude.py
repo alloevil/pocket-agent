@@ -116,8 +116,13 @@ class ClaudeBackend(AgentBackend):
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
         self._approval_futures[approval_id] = fut
 
-        # 命令类工具展示为命令审批，其余为文件/通用
-        is_cmd = tool_name in ("Bash", "BashOutput", "KillShell")
+        # 按工具类型分类，决定审批卡片的标题/措辞
+        if tool_name in ("Bash", "BashOutput", "KillShell"):
+            kind = "command"
+        elif tool_name in ("Read", "Glob", "Grep", "NotebookRead", "LS"):
+            kind = "read"       # 只读类：如实显示「读取」，不误称「修改」
+        else:
+            kind = "file"       # Write/Edit/NotebookEdit 等写类
         summary = ""
         for k in ("command", "file_path", "path", "url", "pattern", "description"):
             if tool_input.get(k):
@@ -126,7 +131,7 @@ class ClaudeBackend(AgentBackend):
         await self.emit(AgentEvent(
             EventKind.APPROVAL_REQUEST, route_id=session.native_id,
             approval_id=approval_id,
-            approval_kind="command" if is_cmd else "file",
+            approval_kind=kind,
             approval_text=summary or tool_name,
             approval_detail=tool_name,
             raw={"tool_input": tool_input},

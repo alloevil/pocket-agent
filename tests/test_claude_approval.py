@@ -89,6 +89,25 @@ def test_approval_deny():
     asyncio.run(run())
 
 
+def test_approval_kind_classification():
+    """工具按类型正确分类：Bash→command、Read→read、Write/Edit→file。"""
+    async def run():
+        b = ClaudeBackend(approvals=False)
+        cases = [("Bash", "command"), ("Read", "read"), ("Glob", "read"),
+                 ("Write", "file"), ("Edit", "file")]
+        for i, (tool, expect) in enumerate(cases):
+            s = AgentSession(user_id="u", chat_id="c", native_id=f"s{i}",
+                             mcp_token=f"tk{i}")
+            b._token_sessions[f"tk{i}"] = s
+            task = asyncio.create_task(b._on_permission(f"tk{i}", tool, {"file_path": "/x"}))
+            ev = await asyncio.wait_for(b._events.get(), 2)
+            assert ev.approval_kind == expect, f"{tool} 应为 {expect}，实际 {ev.approval_kind}"
+            s.pending_approvals[ev.approval_id] = {"tool_input": ev.raw["tool_input"]}
+            await b.approve(s, ev.approval_id, approved=True)
+            await asyncio.wait_for(task, 2)
+    asyncio.run(run())
+
+
 def test_real_claude_approval():
     """真实 claude：触发一个 Bash 审批，自动批准，断言被调用 + 执行成功。"""
     if not shutil.which("claude"):
