@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/alloevil/pocket-agent/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/alloevil/pocket-agent/actions/workflows/tests.yml/badge.svg"></a>
+  <a href="https://github.com/alloevil/pocket-agent/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/alloevil/pocket-agent?logo=github&color=blue"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="Agents" src="https://img.shields.io/badge/agents-Claude%20Code%20%7C%20opencode%20%7C%20Codex-orange">
