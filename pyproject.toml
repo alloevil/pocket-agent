@@ -9,7 +9,7 @@ authors = [{ name = "alloevil" }]
 keywords = ["feishu", "lark", "ai-agent", "claude-code", "opencode", "codex", "coding-agent"]
 
 dependencies = [
-    "websockets>=13.0",
+    "websockets>=16.1.1",
     "aiohttp>=3.9",
     "lark-oapi>=1.3.0",
 ]
